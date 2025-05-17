@@ -48,7 +48,7 @@ const SelfieLocationPunched = () => {
 
     const userLat = parseFloat(userLoc.lat);
     const userLon = parseFloat(userLoc.lon);
-    const maxAllowedDistance = isAppleDevice() ? 80000 : 50000; // meters
+    const maxAllowedDistance = isAppleDevice() ? 800 : 500; // meters
 
     const toRadians = (degree) => (degree * Math.PI) / 180;
     const earthRadius = 6371; // in km
