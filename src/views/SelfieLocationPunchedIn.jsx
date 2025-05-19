@@ -85,7 +85,7 @@ const SelfieLocationPunched = () => {
         // Always-available fallback or additional known locations
         const fallbackLocations = [
           { lat: 21.246699, lon: 81.662397 },
-          { lat: 21.237747, lon: 81.66866 },
+          { lat: 21.237747, lon: 81.67866 },
         ];
 
         let formatted = [];
@@ -112,7 +112,7 @@ const SelfieLocationPunched = () => {
         // On fetch error, still fallback to default locations
         setTargetLocations([
           { lat: 21.246699, lon: 81.662397 },
-          { lat: 21.237747, lon: 81.66866 },
+          { lat: 21.237747, lon: 81.67866 },
         ]);
       }
     };
