@@ -48,7 +48,7 @@ const SelfieLocationPunched = () => {
 
     const userLat = parseFloat(userLoc.lat);
     const userLon = parseFloat(userLoc.lon);
-    const maxAllowedDistance = isAppleDevice() ? 800 : 500; // meters
+    const maxAllowedDistance = isAppleDevice() ? 1000 : 1500; // meters
 
     const toRadians = (degree) => (degree * Math.PI) / 180;
     const earthRadius = 6371; // in km
@@ -86,6 +86,7 @@ const SelfieLocationPunched = () => {
         const fallbackLocations = [
           { lat: 21.246699, lon: 81.662397 },
           { lat: 21.237747, lon: 81.66866 },
+          { lat: 21.237747, lon: 81.67866 },
         ];
 
         let formatted = [];
@@ -113,6 +114,7 @@ const SelfieLocationPunched = () => {
         setTargetLocations([
           { lat: 21.246699, lon: 81.662397 },
           { lat: 21.237747, lon: 81.66866 },
+          { lat: 21.237743, lon: 81.67866 },
         ]);
       }
     };
