@@ -77,7 +77,9 @@ const SelfieLocationPunched = () => {
   useEffect(() => {
     const fetchTargetLocations = async () => {
       try {
-        const response = await axios.get("http://192.168.1.57:5000/location");
+        const response = await axios.get(
+          "https://attendancebackends.onrender.com/location"
+        );
         console.log("location Data:", response.data);
 
         // Always-available fallback or additional known locations
