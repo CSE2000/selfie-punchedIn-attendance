@@ -1,18 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
-import {
-  UserCircle,
-  LogIn,
-  LogOut,
-  User,
-  Menu,
-  X,
-  CalendarCheck,
-  CloudCog,
-} from "lucide-react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+import { User, X } from "lucide-react";
 import axios from "axios";
+import { IoMdArrowBack } from "react-icons/io";
 
 const SelfieLocationPunched = () => {
+  const navigate = useNavigate();
   const [targetLocations, setTargetLocations] = useState([null]);
   const [selfieImage, setSelfieImage] = useState(null);
   const [location, setLocation] = useState({ lat: null, lon: null });
@@ -421,122 +414,175 @@ const SelfieLocationPunched = () => {
       email: "",
       employeeId: "",
     });
-
-    // Remove authentication state from localStorage
     localStorage.removeItem("authState");
-    localStorage.removeItem("token"); // Remove token as well
+    localStorage.removeItem("token");
 
     setIsMenuOpen(false);
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Navigation Bar */}
-      <nav className="bg-blue-600 text-white shadow-md">
-        <div className="container mx-auto px-4">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <h1 className="text-xl font-bold">Attendance System</h1>
-            </div>
+    <>
+      <div className="flex items-center h-12 w-full bg-white px-6 py-4 shadow-md">
+        <button
+          onClick={() => navigate("/home")}
+          className="flex items-center space-x-2 text-gray-600 font-medium"
+        >
+          <IoMdArrowBack size={20} />
+          <span>Home</span>
+        </button>
+      </div>
 
-            {/* Desktop Menu: Include Attendance Details Link */}
-            <div className="hidden md:flex items-center space-x-6">
-              {isAuthenticated ? (
-                <>
-                  <span className="flex items-center">
-                    <UserCircle className="mr-2" size={20} />
-                    {userProfile.name}
-                  </span>
-                  <Link
-                    to="/attendance-details"
-                    className="flex items-center px-3 py-2 rounded hover:bg-blue-600"
-                  >
-                    <CalendarCheck className="mr-2" size={18} />
-                    Attendance Details
-                  </Link>
-                  <button
-                    onClick={handleLogout}
-                    className="flex items-center px-3 py-2 rounded hover:bg-blue-700"
-                  >
-                    <LogOut className="mr-1" size={16} />
-                    Logout
-                  </button>
-                </>
-              ) : (
-                <div>
-                  <button
-                    onClick={() => {
-                      setAuthMode("login");
-                      setShowAuthModal(true);
-                    }}
-                    className="px-4 py-2 rounded hover:bg-blue-700"
-                  >
-                    Login
-                  </button>
-                  <button
-                    onClick={() => {
-                      setAuthMode("signup");
-                      setShowAuthModal(true);
-                    }}
-                    className="px-4 py-2 rounded bg-white text-blue-600 hover:bg-gray-100 ml-2"
-                  >
-                    Sign Up
-                  </button>
-                </div>
-              )}
-            </div>
+      <div className="min-h-screen bg-gray-50">
+        <div className="container mx-auto">
+          {isAuthenticated ? (
+            <div className="max-w-md mx-auto bg-white rounded-lg shadow-md overflow-hidden">
+              <div className="p-4 mt-4">
+                {/* Selfie UI */}
+                <div className="flex flex-col items-center justify-center space-y-6">
+                  {selfieImage ? (
+                    <div className="relative">
+                      {/* Circular Dotted Border */}
+                      <div className="relative w-48 h-48 rounded-full border-dotted border-purple-300 flex items-center justify-center">
+                        <img
+                          src={selfieImage}
+                          alt="Captured Selfie"
+                          className="w-60 h-60 rounded-full object-cover"
+                        />
+                      </div>
+                      {/* Reset Button */}
+                      <button
+                        onClick={resetSelfie}
+                        className="absolute top-0 right-0 bg-red-500 text-white p-1 rounded-full hover:bg-red-600"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="w-48 h-48 bg-gray-800 rounded-full flex items-center justify-center relative">
+                      {!cameraActive ? (
+                        <button
+                          onClick={() => setCameraActive(true)}
+                          className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-full"
+                        >
+                          Open Camera
+                        </button>
+                      ) : (
+                        <>
+                          <video
+                            ref={videoRef}
+                            autoPlay
+                            playsInline
+                            className="w-44 h-44 rounded-full object-cover"
+                          />
+                          <button
+                            onClick={captureSelfie}
+                            className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-1/2 bg-white p-3 rounded-full shadow-md"
+                          >
+                            <div className="w-12 h-12 rounded-full bg-purple-400 shadow-inner border-4 border-purple-200"></div>
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
 
-            {/* Mobile menu button */}
-            <div className="md:hidden">
-              <button
-                onClick={() => setIsMenuOpen(!isMenuOpen)}
-                className="p-2 rounded-md hover:bg-blue-700 focus:outline-none"
-              >
-                {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
-              </button>
-            </div>
-          </div>
-        </div>
+                  <canvas ref={canvasRef} style={{ display: "none" }} />
 
-        {/* Mobile Menu */}
-        {isMenuOpen && (
-          <div className="md:hidden bg-blue-700 px-4 py-3">
-            {isAuthenticated ? (
-              <div className="space-y-3">
-                <div className="flex items-center py-2 border-b border-blue-600">
-                  <UserCircle className="mr-2" size={20} />
-                  <span>{userProfile.name}</span>
+                  {/* Title and Description */}
+                  <div className="text-center">
+                    <h2 className="text-lg font-semibold text-gray-800">
+                      Verify to punch in
+                    </h2>
+                    <p className="text-gray-500 mt-1 text-sm max-w-xs">
+                      These additions will make each card much more informative
+                      without cluttering the design.
+                    </p>
+                  </div>
+
+                  {/* Submit Button */}
+                  <button
+                    onClick={sendPunchInData}
+                    disabled={
+                      isSubmitting ||
+                      !selfieImage ||
+                      !location.lat ||
+                      !location.lon
+                    }
+                    className={`mt-4 w-20 h-20 rounded-full font-medium flex items-center justify-center ${
+                      isSubmitting ||
+                      !selfieImage ||
+                      !location.lat ||
+                      !location.lon
+                        ? "bg-gray-300 text-white cursor-not-allowed"
+                        : "bg-purple-500 hover:bg-purple-600 text-white"
+                    }`}
+                  >
+                    {isSubmitting ? "..." : "✔"}
+                  </button>
+
+                  {/* API Response */}
+                  {apiResponse && (
+                    <div
+                      className={`mt-4 p-3 rounded-md text-center ${
+                        apiResponse.success
+                          ? "bg-green-100 text-green-700"
+                          : "bg-red-100 text-red-700"
+                      }`}
+                    >
+                      {apiResponse.message}
+                    </div>
+                  )}
                 </div>
-                <div className="flex items-center py-2 text-sm">
-                  <span className="opacity-80">
-                    ID: {userProfile.employeeId}
-                  </span>
-                </div>
-                <Link
-                  to="/attendance-details"
-                  onClick={() => setIsMenuOpen(false)}
-                  className="flex items-center w-full px-3 py-2 rounded hover:bg-blue-600"
-                >
-                  <CalendarCheck className="mr-2" size={18} />
-                  Attendance Details
-                </Link>
+
                 <button
-                  onClick={handleLogout}
-                  className="w-full flex items-center justify-center px-3 py-2 rounded hover:bg-blue-600"
+                  onClick={sendPunchInData}
+                  disabled={
+                    isSubmitting ||
+                    !selfieImage ||
+                    !location.lat ||
+                    !location.lon
+                  }
+                  className={`w-full py-3 rounded-md text-white font-medium ${
+                    isSubmitting ||
+                    !selfieImage ||
+                    !location.lat ||
+                    !location.lon
+                      ? "bg-gray-400 cursor-not-allowed"
+                      : "bg-green-500 hover:bg-green-600"
+                  }`}
                 >
-                  <LogOut className="mr-1" size={16} />
-                  Logout
+                  {isSubmitting ? "Processing..." : "Punch In"}
                 </button>
+
+                {apiResponse && (
+                  <div
+                    className={`mt-4 p-3 rounded-md text-center ${
+                      apiResponse.success
+                        ? "bg-green-100 text-green-700"
+                        : "bg-red-100 text-red-700"
+                    }`}
+                  >
+                    {apiResponse.message}
+                  </div>
+                )}
               </div>
-            ) : (
-              <div className="space-y-2">
+            </div>
+          ) : (
+            // Not Authenticated UI
+            <div className="max-w-md mx-auto bg-white rounded-lg shadow-md p-6 text-center">
+              <User size={64} className="mx-auto text-gray-400 mb-4" />
+              <h2 className="text-xl font-bold mb-2">
+                Authentication Required
+              </h2>
+              <p className="text-gray-600 mb-6">
+                Please login or create an account to use the attendance system
+              </p>
+              <div className="flex justify-center space-x-4">
                 <button
                   onClick={() => {
                     setAuthMode("login");
                     setShowAuthModal(true);
-                    setIsMenuOpen(false);
                   }}
-                  className="w-full py-2 text-center rounded hover:bg-blue-600"
+                  className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
                 >
                   Login
                 </button>
@@ -544,277 +590,119 @@ const SelfieLocationPunched = () => {
                   onClick={() => {
                     setAuthMode("signup");
                     setShowAuthModal(true);
-                    setIsMenuOpen(false);
                   }}
-                  className="w-full py-2 text-center rounded bg-white text-blue-600 hover:bg-gray-100"
+                  className="px-6 py-2 border border-blue-600 text-blue-600 rounded-md hover:bg-blue-50"
                 >
                   Sign Up
                 </button>
               </div>
-            )}
-          </div>
-        )}
-      </nav>
-
-      {/* Main Content */}
-      <div className="container mx-auto py-8 px-4">
-        {isAuthenticated ? (
-          <div className="max-w-md mx-auto bg-white rounded-lg shadow-md overflow-hidden">
-            {/* Welcome Header */}
-            <div className="p-4 bg-blue-50 border-b border-blue-100">
-              <div className="flex justify-between items-center">
-                <div>
-                  <h2 className="text-xl font-bold text-blue-800">
-                    Welcome, {userProfile.name}
-                  </h2>
-                  <p className="text-sm text-blue-600">
-                    Employee ID: {userProfile.employeeId}
-                  </p>
-                </div>
-                <div className="bg-blue-100 p-2 rounded-full">
-                  <User size={28} className="text-blue-600" />
-                </div>
-              </div>
             </div>
-
-            {/* Selfie Attendance Section */}
-            <div className="p-4">
-              <h3 className="text-lg font-semibold text-center mb-2">
-                Selfie Attendance
-              </h3>
-              <p className="text-sm text-gray-600 text-center mb-4">
-                Capture a selfie to mark your attendance
-              </p>
-
-              {/* Location Display */}
-              <div className="mb-4 bg-gray-100 p-3 rounded-md text-sm text-gray-600">
-                <p className="font-medium mb-1">Your current location:</p>
-                {location.lat && location.lon ? (
-                  <div className="font-mono text-xs">
-                    Lat: {location.lat.toFixed(6)}, Lon:{" "}
-                    {location.lon.toFixed(6)}
-                  </div>
-                ) : (
-                  <div className="text-red-500 text-xs mt-1">
-                    Getting location... Please enable location services.
-                  </div>
-                )}
-              </div>
-
-              {/* Selfie UI */}
-              <div className="mb-4">
-                {selfieImage ? (
-                  <div className="relative">
-                    <img
-                      src={selfieImage}
-                      alt="Captured Selfie"
-                      className="w-full rounded-lg border shadow-sm"
-                    />
-                    <button
-                      onClick={resetSelfie}
-                      className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full hover:bg-red-600"
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
-                ) : (
-                  <div className="border rounded-lg bg-gray-800 relative overflow-hidden">
-                    {!cameraActive ? (
-                      <div className="flex items-center justify-center h-64 bg-gray-900">
-                        <button
-                          onClick={() => setCameraActive(true)}
-                          className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md"
-                        >
-                          Open Camera
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        <video
-                          ref={videoRef}
-                          autoPlay
-                          playsInline
-                          className="w-full h-64 object-cover"
-                        />
-                        <button
-                          onClick={captureSelfie}
-                          className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-white p-3 rounded-full shadow-md"
-                        >
-                          <div className="w-12 h-12 rounded-full border-4 border-blue-500"></div>
-                        </button>
-                      </>
-                    )}
-                  </div>
-                )}
-                <canvas ref={canvasRef} style={{ display: "none" }} />
-              </div>
-
-              {/* Submit Button */}
-              <button
-                onClick={sendPunchInData}
-                disabled={
-                  isSubmitting || !selfieImage || !location.lat || !location.lon
-                }
-                className={`w-full py-3 rounded-md text-white font-medium ${
-                  isSubmitting || !selfieImage || !location.lat || !location.lon
-                    ? "bg-gray-400 cursor-not-allowed"
-                    : "bg-green-500 hover:bg-green-600"
-                }`}
-              >
-                {isSubmitting ? "Processing..." : "Punch In"}
-              </button>
-
-              {/* Response */}
-              {apiResponse && (
-                <div
-                  className={`mt-4 p-3 rounded-md text-center ${
-                    apiResponse.success
-                      ? "bg-green-100 text-green-700"
-                      : "bg-red-100 text-red-700"
-                  }`}
+          )}
+        </div>
+        {/* Authentication Modal */}
+        {showAuthModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden">
+              <div className="flex justify-between items-center px-6 py-4 bg-blue-600 text-white">
+                <h3 className="text-lg font-bold">
+                  {authMode === "login" ? "Login" : "Create Account"}
+                </h3>
+                <button
+                  onClick={() => setShowAuthModal(false)}
+                  className="text-white hover:text-gray-200"
                 >
-                  {apiResponse.message}
+                  <X size={20} />
+                </button>
+              </div>
+              <form onSubmit={handleAuthSubmit} className="p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    User Name
+                  </label>
+                  <input
+                    type="text"
+                    value={userData.userName}
+                    onChange={(e) =>
+                      setUserData({ ...userData, userName: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
                 </div>
-              )}
-            </div>
-          </div>
-        ) : (
-          // Not Authenticated UI
-          <div className="max-w-md mx-auto bg-white rounded-lg shadow-md p-6 text-center">
-            <User size={64} className="mx-auto text-gray-400 mb-4" />
-            <h2 className="text-xl font-bold mb-2">Authentication Required</h2>
-            <p className="text-gray-600 mb-6">
-              Please login or create an account to use the attendance system
-            </p>
-            <div className="flex justify-center space-x-4">
-              <button
-                onClick={() => {
-                  setAuthMode("login");
-                  setShowAuthModal(true);
-                }}
-                className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-              >
-                Login
-              </button>
-              <button
-                onClick={() => {
-                  setAuthMode("signup");
-                  setShowAuthModal(true);
-                }}
-                className="px-6 py-2 border border-blue-600 text-blue-600 rounded-md hover:bg-blue-50"
-              >
-                Sign Up
-              </button>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    value={userData.email}
+                    onChange={(e) =>
+                      setUserData({ ...userData, email: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    value={userData.password}
+                    onChange={(e) =>
+                      setUserData({ ...userData, password: e.target.value })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 transition-colors"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting
+                    ? "Processing..."
+                    : authMode === "login"
+                    ? "Login"
+                    : "Create Account"}
+                </button>
+
+                <div className="text-center text-sm text-gray-600">
+                  {authMode === "login" ? (
+                    <p>
+                      Don't have an account?{" "}
+                      <button
+                        type="button"
+                        onClick={() => setAuthMode("signup")}
+                        className="text-blue-600 hover:underline"
+                      >
+                        Sign Up
+                      </button>
+                    </p>
+                  ) : (
+                    <p>
+                      Already have an account?{" "}
+                      <button
+                        type="button"
+                        onClick={() => setAuthMode("login")}
+                        className="text-blue-600 hover:underline"
+                      >
+                        Login
+                      </button>
+                    </p>
+                  )}
+                </div>
+              </form>
             </div>
           </div>
         )}
       </div>
-
-      {/* Authentication Modal */}
-      {showAuthModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden">
-            <div className="flex justify-between items-center px-6 py-4 bg-blue-600 text-white">
-              <h3 className="text-lg font-bold">
-                {authMode === "login" ? "Login" : "Create Account"}
-              </h3>
-              <button
-                onClick={() => setShowAuthModal(false)}
-                className="text-white hover:text-gray-200"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <form onSubmit={handleAuthSubmit} className="p-6 space-y-4">
-              {/* Username field for both login and signup */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  User Name
-                </label>
-                <input
-                  type="text"
-                  value={userData.userName}
-                  onChange={(e) =>
-                    setUserData({ ...userData, userName: e.target.value })
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email Address
-                </label>
-                <input
-                  type="email"
-                  value={userData.email}
-                  onChange={(e) =>
-                    setUserData({ ...userData, email: e.target.value })
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Password
-                </label>
-                <input
-                  type="password"
-                  value={userData.password}
-                  onChange={(e) =>
-                    setUserData({ ...userData, password: e.target.value })
-                  }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 transition-colors"
-                disabled={isSubmitting}
-              >
-                {isSubmitting
-                  ? "Processing..."
-                  : authMode === "login"
-                  ? "Login"
-                  : "Create Account"}
-              </button>
-
-              <div className="text-center text-sm text-gray-600">
-                {authMode === "login" ? (
-                  <p>
-                    Don't have an account?{" "}
-                    <button
-                      type="button"
-                      onClick={() => setAuthMode("signup")}
-                      className="text-blue-600 hover:underline"
-                    >
-                      Sign Up
-                    </button>
-                  </p>
-                ) : (
-                  <p>
-                    Already have an account?{" "}
-                    <button
-                      type="button"
-                      onClick={() => setAuthMode("login")}
-                      className="text-blue-600 hover:underline"
-                    >
-                      Login
-                    </button>
-                  </p>
-                )}
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
+    </>
   );
 };
 
