@@ -26,6 +26,7 @@
     "react-qr-code": "^2.0.15",
     "react-qrcode-logo": "^3.0.0",
     "react-router-dom": "^7.6.0",
+    "socket.io-client": "^4.8.1",
     "tailwindcss": "^4.1.5"
   },
   "devDependencies": {

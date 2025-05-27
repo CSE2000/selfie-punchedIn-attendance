@@ -5,43 +5,61 @@ import { ArrowLeft } from "lucide-react";
 const ViewFileDetail = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const file = location.state;
 
-  if (!file) {
-    return (
-      <div className="p-6 text-center text-red-500">
-        No file data to display.
-      </div>
-    );
-  }
+  // You are passing an array of files as state directly, so get it like this:
+  const uploadedFiles = location.state || [];
 
   const goBack = () => {
     navigate("/employee-info");
   };
 
+  if (!uploadedFiles.length) {
+    return (
+      <div className="p-6 text-center text-red-500">
+        No files uploaded to display.
+        <br />
+        <button
+          onClick={goBack}
+          className="mt-4 px-4 py-2 bg-blue-600 text-white rounded"
+        >
+          Go Back
+        </button>
+      </div>
+    );
+  }
+
+  // Friendly labels map for the keys used in EmployeeInfo
+  const labelsMap = {
+    panCard: "PAN Card Image",
+    adharCard: "Aadhar Card Image",
+    signature: "Signature Image",
+    certification: "Certification Image",
+  };
+
   return (
-    <div className="min-h-screen bg-gray-100 p-6 flex flex-col items-center">
+    <div className="min-h-screen bg-gray-100 p-6">
       <div
-        className="flex items-center gap-2 cursor-pointer self-start text-blue-600 hover:text-blue-800 mb-4"
+        className="flex items-center gap-2 cursor-pointer text-blue-600 hover:text-blue-800 mb-4"
         onClick={goBack}
       >
         <ArrowLeft className="w-5 h-5" />
-        <h2 className="text-xl font-semibold">View File Details</h2>
+        <h2 className="text-xl font-semibold">View Uploaded Images</h2>
       </div>
 
-      {file.type.startsWith("image/") ? (
-        <img
-          src={file.url}
-          alt="Preview"
-          className="max-w-full h-auto rounded shadow-lg"
-        />
-      ) : (
-        <iframe
-          src={file.url}
-          title="Document Preview"
-          className="w-full max-w-3xl h-[500px] border rounded"
-        />
-      )}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        {uploadedFiles.map(({ name, url }, index) => (
+          <div key={index} className="bg-white p-4 rounded shadow">
+            <h3 className="text-sm font-medium mb-2">
+              {labelsMap[name] || name}
+            </h3>
+            <img
+              src={url}
+              alt={labelsMap[name] || name}
+              className="w-full h-auto rounded"
+            />
+          </div>
+        ))}
+      </div>
     </div>
   );
 };

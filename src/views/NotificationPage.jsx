@@ -71,3 +71,34 @@ const NotificationPage = () => {
 };
 
 export default NotificationPage;
+
+// // src/App.js
+// import React, { useEffect } from "react";
+// import socket from "../socket";
+
+// function App() {
+//   useEffect(() => {
+//     socket.on("connect", () => {
+//       console.log("Connected with socket ID:", socket.id);
+
+//       socket.emit("register", "EMP0012");
+//     });
+
+//     socket.on("notification", (message) => {
+//       alert("Notification: " + message);
+//     });
+
+//     return () => {
+//       socket.off("connect");
+//       socket.off("notification");
+//     };
+//   }, []);
+
+//   return (
+//     <div className="App">
+//       <h1>React + Socket.IO</h1>
+//     </div>
+//   );
+// }
+
+// export default App;

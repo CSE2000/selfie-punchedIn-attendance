@@ -1,25 +1,10 @@
-import { useEffect, useState } from "react";
-import { Calendar, Filter } from "lucide-react";
-
-const AttendanceMobile = () => {
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
-  const [showDateFilter, setShowDateFilter] = useState(false);
-
-  const [attendanceSummary, setAttendanceSummary] = useState({
-    present: 0,
-    absent: 0,
-    halfday: 0,
-    leaveUsed: 0,
-    availableLeave: 14,
-    medical: 0,
-    unpaidLeave: 0,
-  });
-  const [monthlyAttendance, setMonthlyAttendance] = useState([]);
-
-  const companyHolidays = [
+const getOutTimeText = (entry) => {
+    if (entry.status === "Present" || entry.status === "Halfday") {
+      return `${entry.punchIn} am - ${entry.punchOut} pm`;
+    } else {
+      return "00:00 am - 00:00 pm";
+    }
+  };  const companyHolidays = [
     "2025-01-01", // New Year
     "2025-01-26", // Republic Day
     "2025-03-14", // Holi
@@ -70,109 +55,138 @@ const AttendanceMobile = () => {
     if (companyHolidays.includes(dateStr)) return true;
 
     return false;
-  };
+  };import { useEffect, useState } from "react";
+import { Calendar, Filter } from "lucide-react";
+import axios from 'axios';
 
-  const generateMockAttendance = (year, month) => {
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const today = new Date();
-    const isCurrentMonth =
-      month === today.getMonth() && year === today.getFullYear();
-    const data = [];
+const AttendanceMobile = () => {
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [showDateFilter, setShowDateFilter] = useState(false);
 
-    let totalPaidLeaveUsed = 0; // Track paid leave used across all months up to current month
-
-    // Calculate paid leave used in previous months (mock calculation)
-    for (let m = 0; m < month; m++) {
-      const prevMonthDays = new Date(year, m + 1, 0).getDate();
-      for (let d = 1; d <= prevMonthDays; d++) {
-        const date = new Date(year, m, d);
-        if (!isWeekendOrHoliday(date) && d % 8 === 0) {
-          // Mock: every 8th working day is leave
-          totalPaidLeaveUsed++;
-        }
-      }
-    }
-
-    for (let day = 1; day <= daysInMonth; day++) {
-      const date = new Date(year, month, day);
-      const dateStr = date.toISOString().split("T")[0];
-
-      // Skip future dates in current month
-      if (isCurrentMonth && date > today) break;
-
-      // Skip weekends and holidays
-      if (isWeekendOrHoliday(date)) continue;
-
-      let status,
-        punchIn = null,
-        punchOut = null,
-        leaveType = null;
-
-      // Generate mock attendance pattern
-      if (day % 8 === 0) {
-        // Leave every 8th working day
-        if (totalPaidLeaveUsed < 14) {
-          status = "Absent";
-          leaveType = "Paid";
-          totalPaidLeaveUsed++;
-        } else {
-          status = "Absent";
-          leaveType = "Unpaid";
-        }
-      } else if (day % 5 === 0) {
-        // Half day every 5th working day
-        status = "Halfday";
-        punchIn = "10:05";
-        punchOut = ["02:30", "03:00", "03:30"][Math.floor(Math.random() * 3)];
-      } else {
-        status = "Present";
-        punchIn = "10:05";
-        punchOut = "06:30";
-      }
-
-      data.push({
-        date: dateStr,
-        status,
-        punchIn,
-        punchOut,
-        leaveType,
-        day: date.getDate(),
-        weekday: date.toLocaleDateString("en-US", { weekday: "long" }),
-      });
-    }
-
-    return { data: data.reverse(), totalPaidLeaveUsed };
-  };
+  const [attendanceSummary, setAttendanceSummary] = useState({
+    present: 0,
+    absent: 0,
+    halfday: 0,
+    leaveUsed: 0,
+    availableLeave: 14,
+    medical: 0,
+    unpaidLeave: 0,
+  });
+  const [monthlyAttendance, setMonthlyAttendance] = useState([]);
 
   useEffect(() => {
-    const { data: mockData, totalPaidLeaveUsed } = generateMockAttendance(
-      selectedYear,
-      selectedMonth
-    );
+    const fetchUserLeave = async () => {
+      try {
+        const token = localStorage.getItem('token');
 
-    const present = mockData.filter((d) => d.status === "Present").length;
-    const halfday = mockData.filter((d) => d.status === "Halfday").length;
-    const absentEntries = mockData.filter((d) => d.status === "Absent");
-    const paidLeaves = absentEntries.filter(
-      (d) => d.leaveType === "Paid"
-    ).length;
-    const unpaidLeaves = absentEntries.filter(
-      (d) => d.leaveType === "Unpaid"
-    ).length;
-    const medical = Math.floor(paidLeaves * 0.3); // Mock: 30% of paid leaves are medical
+        if (!token) {
+          console.error('No token found in localStorage');
+          return;
+        }
 
-    const availableLeave = Math.max(0, 14 - totalPaidLeaveUsed);
+        const response = await axios.get('http://192.168.1.8:8000/userleave', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
 
-    setMonthlyAttendance(mockData);
-    setAttendanceSummary({
-      present,
-      halfday,
-      absent: absentEntries.length,
-      medical,
-      leaveUsed: totalPaidLeaveUsed,
-      availableLeave,
-      unpaidLeave: unpaidLeaves,
-    });
+        console.log('=== API RESPONSE DEBUG ===');
+        console.log('Raw API Response:', response);
+        console.log('Response Data:', response.data);
+        console.log('Response Data Type:', typeof response.data);
+        console.log('Is Array:', Array.isArray(response.data));
+        
+        if (response.data) {
+          console.log('Response Data Keys:', Object.keys(response.data));
+          console.log('Response Data Values:', Object.values(response.data));
+        }
+        console.log('=== END API DEBUG ===');
+        
+        // Process the API response to extract leave data
+        if (response.data) {
+          const leaveData = response.data;
+          
+          // Calculate leave used from API data
+          let totalLeaveUsed = 0;
+          let medicalLeave = 0;
+          let unpaidLeave = 0;
+          
+          console.log('Processing leave data...');
+          
+          // Check if API returns an array of leave records
+          if (Array.isArray(leaveData)) {
+            console.log('API returned array with', leaveData.length, 'items');
+            leaveData.forEach((leave, index) => {
+              console.log(`Leave Record ${index}:`, leave);
+              
+              if (leave.status === 'approved' || leave.status === 'taken' || leave.status === 'Approved' || leave.status === 'Taken') {
+                const days = leave.days || leave.duration || 1;
+                totalLeaveUsed += days;
+                console.log(`Added ${days} days to total leave`);
+                
+                if (leave.type === 'medical' || leave.type === 'sick' || leave.leave_type === 'medical' || leave.leave_type === 'sick') {
+                  medicalLeave += days;
+                }
+                
+                if (leave.type === 'unpaid' || leave.leave_type === 'unpaid') {
+                  unpaidLeave += days;
+                }
+              }
+            });
+          } 
+          // Check if API returns summary data directly
+          else if (typeof leaveData === 'object') {
+            console.log('API returned object format');
+            
+            // Try different possible field names for leave count
+            totalLeaveUsed = leaveData.leaveUsed || leaveData.leave_used || 
+                           leaveData.totalLeaves || leaveData.total_leaves ||
+                           leaveData.usedLeaves || leaveData.used_leaves ||
+                           leaveData.count || leaveData.length || 0;
+                           
+            medicalLeave = leaveData.medicalLeave || leaveData.medical_leave || 
+                          leaveData.medicalCount || leaveData.medical_count || 0;
+                          
+            unpaidLeave = leaveData.unpaidLeave || leaveData.unpaid_leave ||
+                         leaveData.unpaidCount || leaveData.unpaid_count || 0;
+            
+            console.log('Extracted from object - Total:', totalLeaveUsed, 'Medical:', medicalLeave, 'Unpaid:', unpaidLeave);
+          }
+          // If data is a number directly
+          else if (typeof leaveData === 'number') {
+            console.log('API returned direct number:', leaveData);
+            totalLeaveUsed = leaveData;
+          }
+          
+          console.log('Final calculated values:');
+          console.log('Total Leave Used:', totalLeaveUsed);
+          console.log('Medical Leave:', medicalLeave);
+          console.log('Unpaid Leave:', unpaidLeave);
+          console.log('Available Leave:', Math.max(0, 14 - totalLeaveUsed));
+          
+          // Update attendance summary with real leave data
+          setAttendanceSummary(prev => ({
+            present: 0,
+            absent: 0, 
+            halfday: 0,
+            leaveUsed: totalLeaveUsed,
+            availableLeave: Math.max(0, 14 - totalLeaveUsed),
+            medical: medicalLeave,
+            unpaidLeave: unpaidLeave,
+          }));
+          
+          console.log('Updated attendance summary with leave data');
+        }
+        
+      } catch (error) {
+        console.error('Error fetching user leave:', error);
+      }
+    };
+
+    fetchUserLeave();
   }, [selectedMonth, selectedYear]);
 
   const monthNames = [
@@ -212,19 +226,13 @@ const AttendanceMobile = () => {
     }
   };
 
-  const getOutTimeText = (entry) => {
-    if (entry.status === "Present" || entry.status === "Halfday") {
-      return `${entry.punchIn} am - ${entry.punchOut} pm`;
-    } else {
-      return "00:00 am - 00:00 pm";
-    }
-  };
-
   const filteredAttendance = monthlyAttendance.filter((entry) => {
     if (fromDate && new Date(entry.date) < new Date(fromDate)) return false;
     if (toDate && new Date(entry.date) > new Date(toDate)) return false;
     return true;
   });
+
+
 
   return (
     <div className="max-w-sm mx-auto bg-gray-50 min-h-screen p-4">
@@ -375,280 +383,3 @@ const SummaryCard = ({ label, value, bgColor, textColor }) => {
 };
 
 export default AttendanceMobile;
-
-// import { useEffect, useState } from "react";
-// import Calendar from "react-calendar";
-// import "react-calendar/dist/Calendar.css";
-
-// const AttendanceMobile = () => {
-//   const [showCalendar, setShowCalendar] = useState(false);
-//   const [dateRange, setDateRange] = useState(null);
-
-//   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
-//   const [fromDate, setFromDate] = useState("");
-//   const [toDate, setToDate] = useState("");
-//   const [attendanceSummary, setAttendanceSummary] = useState({
-//     present: 0,
-//     absent: 0,
-//     halfday: 0,
-//     leaveUsed: 0,
-//     availableLeave: 0,
-//     medical: 0,
-//   });
-//   const [monthlyAttendance, setMonthlyAttendance] = useState([]);
-
-//   const holidayList = [
-//     "2025-01-01",
-//     "2025-01-26",
-//     "2025-03-14",
-//     "2025-08-09",
-//     "2025-08-15",
-//     "2025-08-16",
-//     "2025-10-02",
-//     "2025-10-20",
-//     "2025-10-21",
-//     "2025-10-22",
-//     "2025-12-25",
-//   ];
-
-//   const generateMockAttendance = (year, month) => {
-//     const daysInMonth = new Date(year, month + 1, 0).getDate();
-//     const today = new Date();
-//     const isCurrentMonth =
-//       month === today.getMonth() && year === today.getFullYear();
-//     const data = [];
-//     let saturdayCount = 0;
-
-//     for (let day = 1; day <= daysInMonth; day++) {
-//       const date = new Date(year, month, day);
-//       const dateStr = date.toISOString().split("T")[0];
-//       const dayOfWeek = date.getDay();
-
-//       if (isCurrentMonth && date > today) break;
-//       if (dayOfWeek === 0) continue;
-//       if (dayOfWeek === 6) {
-//         saturdayCount++;
-//         if (saturdayCount <= 2) continue;
-//       }
-//       if (holidayList.includes(dateStr)) continue;
-
-//       let status,
-//         punchIn = null,
-//         punchOut = null;
-//       if (day % 5 === 0) {
-//         status = "Absent";
-//       } else if (day % 3 === 0) {
-//         status = "Halfday";
-//         punchIn = "10:05";
-//         punchOut = ["02:30", "03:00", "03:30"][Math.floor(Math.random() * 3)];
-//       } else {
-//         status = "Present";
-//         punchIn = "10:05";
-//         punchOut = "06:30";
-//       }
-
-//       data.push({ date: dateStr, status, punchIn, punchOut });
-//     }
-
-//     return data;
-//   };
-
-//   useEffect(() => {
-//     const currentYear = new Date().getFullYear();
-//     const mockData = generateMockAttendance(currentYear, selectedMonth);
-
-//     const present = mockData.filter((d) => d.status === "Present").length;
-//     const halfday = mockData.filter((d) => d.status === "Halfday").length;
-//     const absentEntries = mockData.filter((d) => d.status === "Absent");
-//     const leaveUsed = absentEntries.length;
-//     const medical = absentEntries.filter((d) =>
-//       holidayList.includes(d.date)
-//     ).length;
-
-//     const availableLeave = Math.max(0, 14 - leaveUsed);
-
-//     setMonthlyAttendance(mockData.reverse());
-//     setAttendanceSummary({
-//       present,
-//       halfday,
-//       absent: leaveUsed,
-//       medical,
-//       leaveUsed,
-//       availableLeave,
-//     });
-//   }, [selectedMonth]);
-
-//   const monthNames = [
-//     "January",
-//     "February",
-//     "March",
-//     "April",
-//     "May",
-//     "June",
-//     "July",
-//     "August",
-//     "September",
-//     "October",
-//     "November",
-//     "December",
-//   ];
-
-//   const formatDate = (dateStr) => {
-//     const date = new Date(dateStr);
-//     return date.toLocaleDateString("en-GB", {
-//       day: "2-digit",
-//       month: "long",
-//       year: "numeric",
-//     });
-//   };
-
-//   const getWeekday = (dateStr) => {
-//     const date = new Date(dateStr);
-//     return date.toLocaleDateString("en-US", { weekday: "long" });
-//   };
-
-//   const getStatusColor = (status) => {
-//     switch (status) {
-//       case "Present":
-//         return "text-green-600";
-//       case "Absent":
-//         return "text-red-500";
-//       case "Halfday":
-//         return "text-yellow-500";
-//       default:
-//         return "text-gray-500";
-//     }
-//   };
-
-//   const getOutTimeText = (entry) => {
-//     if (entry.status === "Present" || entry.status === "Halfday") {
-//       return `${entry.punchIn} am - ${entry.punchOut} pm`;
-//     } else {
-//       return "00:00";
-//     }
-//   };
-
-//   const filteredAttendance = monthlyAttendance.filter((entry) => {
-//     if (fromDate && new Date(entry.date) < new Date(fromDate)) return false;
-//     if (toDate && new Date(entry.date) > new Date(toDate)) return false;
-//     return true;
-//   });
-
-//   return (
-//     <div className="max-w-sm mx-auto bg-white min-h-screen">
-//       {/* Header with Month Picker */}
-//       <div className="flex items-center justify-between mb-4 gap-2">
-//         <h1 className="text-lg font-bold">Your attendance</h1>
-//         <select
-//           className="border rounded px-2 py-1 text-sm"
-//           value={selectedMonth}
-//           onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-//         >
-//           {monthNames.map((m, i) => (
-//             <option value={i} key={i}>
-//               {m}
-//             </option>
-//           ))}
-//         </select>
-//       </div>
-
-//       {/* Summary Cards */}
-//       <div className="grid grid-cols-3 gap-3 mb-4">
-//         <SummaryCard
-//           label="Present"
-//           value={attendanceSummary.present}
-//           color="green"
-//         />
-//         <SummaryCard
-//           label="Absent"
-//           value={attendanceSummary.absent}
-//           color="red"
-//         />
-//         <SummaryCard
-//           label="Leave Used"
-//           value={attendanceSummary.leaveUsed}
-//           color="yellow"
-//         />
-//         <SummaryCard
-//           label="Halfday"
-//           value={attendanceSummary.halfday}
-//           color="orange"
-//         />
-//         <SummaryCard
-//           label="Medical"
-//           value={attendanceSummary.medical}
-//           color="blue"
-//         />
-//         <SummaryCard
-//           label="Available Leave"
-//           value={attendanceSummary.availableLeave}
-//           color="gray"
-//         />
-//       </div>
-
-//       {/* Attendance List */}
-//       <div className="mb-2">
-//         <h2 className="font-semibold text-md">
-//           Attendance Records ({filteredAttendance.length})
-//         </h2>
-//       </div>
-
-//       {/* Date Range Filter */}
-//       <div className="flex gap-2 mb-4">
-//         <input
-//           type="date"
-//           className="border px-2 py-1 rounded text-sm w-full"
-//           value={fromDate}
-//           onChange={(e) => setFromDate(e.target.value)}
-//         />
-//         <input
-//           type="date"
-//           className="border px-2 py-1 rounded text-sm w-full"
-//           value={toDate}
-//           onChange={(e) => setToDate(e.target.value)}
-//         />
-//       </div>
-
-//       <div className="space-y-2">
-//         {filteredAttendance.map((entry, idx) => (
-//           <div
-//             key={idx}
-//             className="flex justify-between items-center bg-gray-100 p-3 rounded-xl"
-//           >
-//             <div>
-//               <p className="text-sm font-bold">{formatDate(entry.date)}</p>
-//               <p className="text-xs text-gray-600">
-//                 {getWeekday(entry.date)}
-//                 <br />
-//                 {getOutTimeText(entry)}
-//               </p>
-//             </div>
-//             <span className={`font-medium ${getStatusColor(entry.status)}`}>
-//               {entry.status}
-//             </span>
-//           </div>
-//         ))}
-//       </div>
-//     </div>
-//   );
-// };
-
-// const SummaryCard = ({ label, value, color }) => {
-//   const bgMap = {
-//     green: "bg-green-100 text-green-600",
-//     red: "bg-red-100 text-red-600",
-//     yellow: "bg-yellow-100 text-yellow-600",
-//     orange: "bg-orange-100 text-orange-500",
-//     blue: "bg-blue-100 text-blue-600",
-//     gray: "bg-gray-100 text-gray-700",
-//   };
-
-//   return (
-//     <div className={`p-3 rounded-xl text-center ${bgMap[color]}`}>
-//       <p className="text-sm font-semibold">{label}</p>
-//       <p className="text-xl font-bold">{value}</p>
-//     </div>
-//   );
-// };
-
-// export default AttendanceMobile;

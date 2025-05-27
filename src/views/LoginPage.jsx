@@ -6,6 +6,7 @@ export default function LoginPage() {
   const [userId, setUserId] = useState("");
   const [pin, setPin] = useState(["", "", "", ""]);
   const [error, setError] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -28,7 +29,7 @@ export default function LoginPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
-
+    setIsLoading(true);
     const passcode = pin.join("");
     if (!userId || passcode.length < 4) {
       setError("Please enter User ID and 4-digit PIN.");
@@ -36,7 +37,7 @@ export default function LoginPage() {
     }
 
     try {
-      const response = await fetch("http://192.168.1.26:8000/user/login", {
+      const response = await fetch("http://192.168.1.8:8000/user/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -48,13 +49,11 @@ export default function LoginPage() {
       if (!response.ok) {
         throw new Error(`Login failed: ${response.statusText}`);
       }
-
+      // setIsLoading(false);
       const data = await response.json();
-
       console.log("Login response:", data);
 
       // Save token or user data in localStorage for auth persistence
-      // Adjust this depending on your API response
       localStorage.setItem("token", data.token || "dummy-token");
 
       navigate("/home");
@@ -62,6 +61,7 @@ export default function LoginPage() {
       console.error("Login error:", err);
       setError("Login failed. Please check your credentials and try again.");
     }
+    setIsLoading(false);
   };
 
   return (
@@ -124,10 +124,17 @@ export default function LoginPage() {
         {/* Sign In Button */}
         <button
           type="submit"
+          disabled={isLoading}
+          className="w-full bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white py-3 rounded-md text-sm font-semibold shadow-md transition disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          {isLoading ? "Signing in..." : "Sign In"}
+        </button>
+        {/* <button
+          type="submit"
           className="w-full bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white py-3 rounded-md text-sm font-semibold shadow-md transition"
         >
           Sign In
-        </button>
+        </button> */}
       </form>
     </div>
   );
