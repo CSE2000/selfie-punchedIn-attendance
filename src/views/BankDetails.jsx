@@ -75,7 +75,7 @@ const BankDetailsForm = () => {
 
       try {
         const response = await axios.get(
-          "http://192.168.1.8:8000/paymentdetails",
+          "https://attendancebackends.onrender.com/paymentdetails",
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -229,7 +229,7 @@ const BankDetailsForm = () => {
       const bankId = id || location.state?.bankId || responseId;
       if (bankId) {
         response = await axios.put(
-          `http://192.168.1.8:8000/paymentdetails/${bankId}`,
+          `https://attendancebackends.onrender.com/${bankId}`,
           submitData,
           {
             headers: {
@@ -260,7 +260,7 @@ const BankDetailsForm = () => {
         }
       } else {
         response = await axios.post(
-          "http://192.168.1.8:8000/paymentdetails",
+          "https://attendancebackends.onrender.com/paymentdetails",
           submitData,
           {
             headers: {

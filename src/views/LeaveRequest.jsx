@@ -27,7 +27,7 @@ const LeaveRequestPage = () => {
 
     try {
       setLoading(true);
-      const response = await axios.get("http://192.168.1.8:8000/userleave", {
+      const response = await axios.get("https://attendancebackends.onrender.com/userleave", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -76,7 +76,7 @@ const LeaveRequestPage = () => {
       console.log("Submitting payload:", payload);
 
       const response = await axios.post(
-        "http://192.168.1.8:8000/userleave",
+        "https://attendancebackends.onrender.com/userleave",
         payload,
         {
           headers: {

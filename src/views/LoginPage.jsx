@@ -18,11 +18,26 @@ export default function LoginPage() {
 
   const handlePinChange = (index, value) => {
     if (value.length > 1) return;
+
     const newPin = [...pin];
     newPin[index] = value;
     setPin(newPin);
+
     if (value && index < 3) {
-      document.getElementById(`pin-${index + 1}`).focus();
+      const nextInput = document.getElementById(`pin-${index + 1}`);
+      if (nextInput) nextInput.focus();
+    }
+  };
+
+  const handleKeyDown = (index, e) => {
+    if (e.key === "Backspace" && !pin[index] && index > 0) {
+      const prevInput = document.getElementById(`pin-${index - 1}`);
+      if (prevInput) {
+        prevInput.focus();
+        const newPin = [...pin];
+        newPin[index - 1] = "";
+        setPin(newPin);
+      }
     }
   };
 
@@ -37,14 +52,17 @@ export default function LoginPage() {
     }
 
     try {
-      const response = await fetch("http://192.168.1.8:8000/user/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId,
-          pin: passcode,
-        }),
-      });
+      const response = await fetch(
+        "https://attendancebackends.onrender.com/user/login",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId,
+            pin: passcode,
+          }),
+        }
+      );
 
       if (!response.ok) {
         throw new Error(`Login failed: ${response.statusText}`);
@@ -91,9 +109,9 @@ export default function LoginPage() {
         <input
           type="text"
           value={userId}
-          onChange={(e) => setUserId(e.target.value)}
+          onChange={(e) => setUserId(e.target.value.toUpperCase())}
           placeholder="Enter your registered User ID"
-          className="w-full px-4 py-3 border border-gray-300 rounded-md mb-6 shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
+          className="w-full px-4 py-3 border border-gray-300 rounded-md mb-6 shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-400 uppercase"
         />
 
         {/* Passcode Boxes */}
@@ -106,6 +124,7 @@ export default function LoginPage() {
               maxLength={1}
               value={digit}
               onChange={(e) => handlePinChange(idx, e.target.value)}
+              onKeyDown={(e) => handleKeyDown(idx, e)}
               className="w-12 h-12 text-center border border-gray-300 rounded-md text-xl font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
             />
           ))}

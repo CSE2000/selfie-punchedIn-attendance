@@ -11,7 +11,7 @@ const DocumentCenter = () => {
     const fetchEmpInfo = async () => {
       try {
         const token = localStorage.getItem("token");
-        const response = await axios.get("http://192.168.1.8:8000/empinfo", {
+        const response = await axios.get("https://attendancebackends.onrender.com/empinfo", {
           headers: {
             Authorization: `Bearer ${token}`,
           },

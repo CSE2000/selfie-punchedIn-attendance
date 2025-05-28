@@ -27,7 +27,7 @@ const EmployeeInfo = () => {
   useEffect(() => {
     const fetchEmpInfo = async () => {
       try {
-        const response = await axios.get("http://192.168.1.8:8000/empinfo", {
+        const response = await axios.get("https://attendancebackends.onrender.com/empinfo", {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -147,7 +147,7 @@ const EmployeeInfo = () => {
 
       if (empId) {
         // PUT request to update existing data
-        await axios.put(`http://192.168.1.8:8000/empinfo/${empId}`, payload, {
+        await axios.put(`https://attendancebackends.onrender.com/empinfo/${empId}`, payload, {
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "multipart/form-data",
@@ -156,7 +156,7 @@ const EmployeeInfo = () => {
         alert("Employee info updated successfully!");
       } else {
         // POST request to create new
-        await axios.post("http://192.168.1.8:8000/empinfo", payload, {
+        await axios.post("https://attendancebackends.onrender.com/empinfo", payload, {
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "multipart/form-data",

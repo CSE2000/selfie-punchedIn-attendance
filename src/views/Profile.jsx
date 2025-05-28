@@ -11,13 +11,14 @@ const Profile = () => {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
   const [selectedImage, setSelectedImage] = useState(null);
+  const [profileImageUrl, setProfileImageUrl] = useState(null);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [userData, setUserData] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const API_ENDPOINT = "http://192.168.1.8:8000/user/me";
+  const API_ENDPOINT = "https://attendancebackends.onrender.com/user/me";
   const token = localStorage.getItem("token");
 
   useEffect(() => {
@@ -25,16 +26,16 @@ const Profile = () => {
       try {
         setLoading(true);
         const response = await axios.get(API_ENDPOINT, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { Authorization: `Bearer ${token}` },
         });
 
-        const fullData = response.data;
-        const userAuthData = fullData.data?.panelData?.userAuth?.[0];
-
+        const userAuthData = response.data.data.panelData.userAuth?.[0] || {};
         console.log("Profile Data:", userAuthData);
-        setUserData(userAuthData || {});
+
+        setUserData(userAuthData);
+        if (userAuthData.image) {
+          setSelectedImage(userAuthData.image); // Set the fetched image URL here
+        }
         setError(null);
       } catch (err) {
         console.error("API Error:", err);
@@ -56,7 +57,7 @@ const Profile = () => {
     name: userData.userName || "User",
     designation: userData.role || "Employee",
     employeeId: userData.userId || "EMP0000",
-    profileImage: selectedImage || profileImage,
+    profileImage: selectedImage || profileImage, // selectedImage will have API image URL
   };
 
   const profileOptions = [
@@ -77,7 +78,6 @@ const Profile = () => {
         const formData = new FormData();
         formData.append("photo", file);
 
-        // You can uncomment and modify this if you want to upload the image immediately
         const response = await axios.put(API_ENDPOINT, formData, {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -108,7 +108,7 @@ const Profile = () => {
   if (loading) {
     return (
       <div className="max-w-md mx-auto sm:hidden bg-white min-h-screen pt-4 flex items-center justify-center">
-          <div className="animate-spin rounded-full h-10 w-10 border-t-4 border-b-4 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-10 w-10 border-t-4 border-b-4 border-blue-600"></div>
       </div>
     );
   }

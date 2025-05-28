@@ -126,7 +126,7 @@ const SelfiePunchedIn = () => {
   useEffect(() => {
     const fetchTargetLocations = async () => {
       try {
-        const response = await axios.get("http://192.168.1.8:8000/location");
+        const response = await axios.get("https://attendancebackends.onrender.com/location");
         console.log("location Data:", response.data);
 
         // Always-available fallback or additional known locations
@@ -171,7 +171,6 @@ const SelfiePunchedIn = () => {
 
   // Request permissions on component mount
   useEffect(() => {
-    // Request front camera (for selfie)
     navigator.mediaDevices
       .getUserMedia({ video: { facingMode: "user" } })
       .then((stream) => {
@@ -360,7 +359,7 @@ const SelfiePunchedIn = () => {
 
       // Create FormData for multipart upload
       const formData = new FormData();
-      formData.append("userID", userProfile.employeeId || "EMP0001");
+      formData.append("userID", userProfile.employeeId || "EMP1234");
       formData.append("userName", userProfile.name || "Employee");
       formData.append("email", userProfile.email || "employee@company.com");
       formData.append("locationName", currentLocationName);
@@ -370,7 +369,7 @@ const SelfiePunchedIn = () => {
       formData.append("selfieImage", selfieBlob, "selfie.jpeg");
 
       console.log("Submitting punch-in data:", {
-        userID: userProfile.employeeId || "EMP0001",
+        userID: userProfile.employeeId || "EMP1234",
         userName: userProfile.name || "Employee",
         email: userProfile.email || "employee@company.com",
         locationName: currentLocationName,
@@ -382,7 +381,7 @@ const SelfiePunchedIn = () => {
       });
 
       const response = await axios.post(
-        "http://192.168.1.8:8000/data",
+        "https://attendancebackends.onrender.com/data",
         formData,
         {
           headers: {
@@ -463,7 +462,7 @@ const SelfiePunchedIn = () => {
 
       // Send only punch out time as JSON
       const response = await axios.put(
-        `http://192.168.1.8:8000/data/${punchInId}`,
+        `https://attendancebackends.onrender.com/data/${punchInId}`,
         { punchOut: punchOutTime },
         {
           headers: {
@@ -501,10 +500,7 @@ const SelfiePunchedIn = () => {
       }
     } catch (error) {
       console.error("Error during punch out:", error);
-
-      // Handle specific error cases
       if (error.response) {
-        // Server responded with error status
         if (error.response.status === 404) {
           setApiResponse({
             success: false,

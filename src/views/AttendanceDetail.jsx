@@ -1,10 +1,34 @@
-const getOutTimeText = (entry) => {
-    if (entry.status === "Present" || entry.status === "Halfday") {
-      return `${entry.punchIn} am - ${entry.punchOut} pm`;
-    } else {
-      return "00:00 am - 00:00 pm";
-    }
-  };  const companyHolidays = [
+import { useEffect, useState } from "react";
+import { Calendar, Filter, ChevronLeft, ChevronRight } from "lucide-react";
+import axios from "axios";
+
+const AttendanceMobile = () => {
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [showDateFilter, setShowDateFilter] = useState(false);
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [itemsPerPage] = useState(10);
+  const [totalItems, setTotalItems] = useState(0);
+
+  const [attendanceSummary, setAttendanceSummary] = useState({
+    present: 0,
+    absent: 0,
+    halfday: 0,
+    leaveUsed: 0,
+    availableLeave: 14,
+    medical: 0,
+    unpaidLeave: 0,
+  });
+  const [monthlyAttendance, setMonthlyAttendance] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  // Company holidays data
+  const companyHolidays = [
     "2025-01-01", // New Year
     "2025-01-26", // Republic Day
     "2025-03-14", // Holi
@@ -17,21 +41,6 @@ const getOutTimeText = (entry) => {
     "2025-10-22", // Bhai Dooj
     "2025-12-25", // Christmas
   ];
-
-  const monthlyHolidayConfig = {
-    0: 7, // January: 4 Sundays + 2 Saturdays + 1 festival = 7 paid holidays
-    1: 6, // February: 4 Sundays + 2 Saturdays = 6 paid holidays
-    2: 7, // March: 4 Sundays + 2 Saturdays + 1 festival = 7 paid holidays
-    3: 6, // April: 4 Sundays + 2 Saturdays = 6 paid holidays
-    4: 6, // May: 4 Sundays + 2 Saturdays = 6 paid holidays
-    5: 6, // June: 4 Sundays + 2 Saturdays = 6 paid holidays
-    6: 6, // July: 4 Sundays + 2 Saturdays = 6 paid holidays
-    7: 8, // August: 4 Sundays + 2 Saturdays + 2 festivals = 8 paid holidays
-    8: 6, // September: 4 Sundays + 2 Saturdays = 6 paid holidays
-    9: 9, // October: 4 Sundays + 2 Saturdays + 3 festivals = 9 paid holidays
-    10: 6, // November: 4 Sundays + 2 Saturdays = 6 paid holidays
-    11: 7, // December: 4 Sundays + 2 Saturdays + 1 festival = 7 paid holidays
-  };
 
   const isWeekendOrHoliday = (date) => {
     const dayOfWeek = date.getDay();
@@ -55,139 +64,325 @@ const getOutTimeText = (entry) => {
     if (companyHolidays.includes(dateStr)) return true;
 
     return false;
-  };import { useEffect, useState } from "react";
-import { Calendar, Filter } from "lucide-react";
-import axios from 'axios';
+  };
 
-const AttendanceMobile = () => {
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
-  const [showDateFilter, setShowDateFilter] = useState(false);
+  // Format time from ISO string to readable format
+  const formatTime = (isoString) => {
+    if (!isoString) return "";
+    const date = new Date(isoString);
+    return date.toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+  };
 
-  const [attendanceSummary, setAttendanceSummary] = useState({
-    present: 0,
-    absent: 0,
-    halfday: 0,
-    leaveUsed: 0,
-    availableLeave: 14,
-    medical: 0,
-    unpaidLeave: 0,
-  });
-  const [monthlyAttendance, setMonthlyAttendance] = useState([]);
+  const getOutTimeText = (entry) => {
+    const isPresent =
+      entry.status?.toLowerCase() === "present" ||
+      entry.status?.toLowerCase() === "halfday";
 
-  useEffect(() => {
-    const fetchUserLeave = async () => {
-      try {
-        const token = localStorage.getItem('token');
+    if (isPresent) {
+      const punchInTime = formatTime(entry.punchIn);
+      const punchOutTime = formatTime(entry.punchOut);
 
-        if (!token) {
-          console.error('No token found in localStorage');
-          return;
-        }
+      if (punchInTime && punchOutTime) {
+        return `${punchInTime} - ${punchOutTime}`;
+      } else if (punchInTime) {
+        return `${punchInTime} - Still Working`;
+      }
+      return entry.timeRange || "";
+    }
+    return "00:00 - 00:00";
+  };
 
-        const response = await axios.get('http://192.168.1.8:8000/userleave', {
+  // Fetch attendance data with pagination
+  const fetchAttendanceData = async (page = 1, limit = 10) => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        console.error("No token found in localStorage");
+        return { data: [], totalPages: 0, totalItems: 0 };
+      }
+
+      // Build query parameters
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: limit.toString(),
+      });
+
+      // Add month/year filters if not "All"
+      if (selectedMonth !== 12) {
+        params.append("month", (selectedMonth + 1).toString());
+      }
+      params.append("year", selectedYear.toString());
+
+      // Add date range filters if set
+      if (fromDate) params.append("fromDate", fromDate);
+      if (toDate) params.append("toDate", toDate);
+
+      const response = await axios.get(
+        `https://attendancebackends.onrender.com/data?${params.toString()}`,
+        {
           headers: {
             Authorization: `Bearer ${token}`,
           },
+        }
+      );
+
+      console.log("Attendance API Response:", response.data);
+
+      // Handle different response formats - FIXED TO HANDLE punchData
+      if (response.data && response.data.punchData) {
+        return {
+          data: response.data.punchData,
+          totalPages: response.data.totalPages || 1,
+          totalItems:
+            response.data.totalItems || response.data.punchData.length,
+          currentPage: response.data.currentPage || page,
+        };
+      } else if (response.data && response.data.data) {
+        return {
+          data: response.data.data,
+          totalPages: response.data.totalPages || 1,
+          totalItems: response.data.totalItems || response.data.data.length,
+          currentPage: response.data.currentPage || page,
+        };
+      } else if (Array.isArray(response.data)) {
+        return {
+          data: response.data,
+          totalPages: 1,
+          totalItems: response.data.length,
+          currentPage: 1,
+        };
+      } else if (response.data && response.data.attendanceData) {
+        return {
+          data: response.data.attendanceData,
+          totalPages: response.data.totalPages || 1,
+          totalItems:
+            response.data.totalItems || response.data.attendanceData.length,
+          currentPage: response.data.currentPage || page,
+        };
+      }
+
+      return { data: [], totalPages: 0, totalItems: 0 };
+    } catch (error) {
+      console.error("Error fetching attendance data:", error);
+      return { data: [], totalPages: 0, totalItems: 0 };
+    }
+  };
+
+  // Fetch leave data
+  const fetchLeaveData = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        console.error("No token found in localStorage");
+        return [];
+      }
+
+      const response = await axios.get(
+        "https://attendancebackends.onrender.com/userleave",
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      console.log("Leave API Response:", response.data);
+
+      // Handle different response formats
+      if (response.data && response.data.leaveData) {
+        return response.data.leaveData;
+      } else if (Array.isArray(response.data)) {
+        return response.data;
+      }
+
+      return [];
+    } catch (error) {
+      console.error("Error fetching leave data:", error);
+      return [];
+    }
+  };
+
+  // Calculate leave statistics
+  const calculateLeaveStats = (leaveData, year, month = null) => {
+    let totalLeaveUsed = 0;
+    let medicalLeave = 0;
+    let unpaidLeave = 0;
+
+    leaveData.forEach((leave) => {
+      const leaveFromDate = new Date(leave.from);
+      const leaveYear = leaveFromDate.getFullYear();
+      const leaveMonth = leaveFromDate.getMonth();
+
+      // Filter by year and month if specified
+      if (year && leaveYear !== year) return;
+      if (month !== null && leaveMonth !== month) return;
+
+      // Only count approved leaves
+      if (leave.status === "approved" || leave.status === "Approved") {
+        const days = leave.totaldays || 1;
+        totalLeaveUsed += days;
+
+        if (leave.leaveType === "Medical" || leave.leaveType === "medical") {
+          medicalLeave += days;
+        }
+
+        if (leave.type === "unpaid") {
+          unpaidLeave += days;
+        }
+      }
+    });
+
+    return {
+      totalLeaveUsed,
+      medicalLeave,
+      unpaidLeave,
+      availableLeave: Math.max(0, 14 - totalLeaveUsed),
+    };
+  };
+
+  // Calculate attendance statistics (for summary) - FIXED
+  const calculateAttendanceStats = (attendanceData, year, month = null) => {
+    let present = 0;
+    let absent = 0;
+    let halfday = 0;
+
+    // Group by date to handle multiple punch entries for same date
+    const dateGroups = {};
+
+    attendanceData.forEach((record) => {
+      const recordDate = new Date(record.date);
+      const recordYear = recordDate.getFullYear();
+      const recordMonth = recordDate.getMonth();
+      const dateKey = record.date;
+
+      // Filter by year and month if specified
+      if (year && recordYear !== year) return;
+      if (month !== null && recordMonth !== month) return;
+
+      // Skip weekends and holidays for absence calculation
+      if (!isWeekendOrHoliday(recordDate)) {
+        // Keep the latest status for the date (or you can implement your own logic)
+        if (
+          !dateGroups[dateKey] ||
+          new Date(record.punchIn) > new Date(dateGroups[dateKey].punchIn)
+        ) {
+          dateGroups[dateKey] = record;
+        }
+      }
+    });
+
+    // Count statistics from grouped data
+    Object.values(dateGroups).forEach((record) => {
+      const status = record.status.toLowerCase();
+      switch (status) {
+        case "present":
+          present++;
+          break;
+        case "absent":
+          absent++;
+          break;
+        case "halfday":
+          halfday++;
+          break;
+      }
+    });
+
+    return { present, absent, halfday };
+  };
+
+  // Process attendance data for display - FIXED
+  const processAttendanceData = (attendanceData) => {
+    return attendanceData.map((record) => ({
+      ...record,
+      weekday: new Date(record.date).toLocaleDateString("en-US", {
+        weekday: "long",
+      }),
+      // Normalize status for consistent display
+      status:
+        record.status.charAt(0).toUpperCase() +
+        record.status.slice(1).toLowerCase(),
+    }));
+  };
+
+  // Handle page change
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= totalPages && newPage !== currentPage) {
+      setCurrentPage(newPage);
+    }
+  };
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedMonth, selectedYear, fromDate, toDate]);
+
+  // Main data fetching and processing
+  useEffect(() => {
+    const fetchAndProcessData = async () => {
+      setLoading(true);
+      try {
+        // Fetch paginated attendance data
+        const attendanceResult = await fetchAttendanceData(
+          currentPage,
+          itemsPerPage
+        );
+
+        // Fetch leave data (not paginated as it's used for summary)
+        const leaveData = await fetchLeaveData();
+
+        console.log("Fetched attendance result:", attendanceResult);
+        console.log("Fetched leave data:", leaveData);
+
+        // Update pagination state
+        setTotalPages(attendanceResult.totalPages);
+        setTotalItems(attendanceResult.totalItems);
+
+        // Determine filter parameters for summary calculations
+        const filterYear = selectedYear;
+        const filterMonth = selectedMonth === 12 ? null : selectedMonth;
+
+        // Calculate leave statistics
+        const leaveStats = calculateLeaveStats(
+          leaveData,
+          filterYear,
+          filterMonth
+        );
+        const allAttendanceResult = await fetchAttendanceData(1, 1000);
+        const attendanceStats = calculateAttendanceStats(
+          allAttendanceResult.data,
+          filterYear,
+          filterMonth
+        );
+
+        // Update summary
+        setAttendanceSummary({
+          present: attendanceStats.present,
+          absent: attendanceStats.absent,
+          halfday: attendanceStats.halfday,
+          leaveUsed: leaveStats.totalLeaveUsed,
+          availableLeave: leaveStats.availableLeave,
+          medical: leaveStats.medicalLeave,
+          unpaidLeave: leaveStats.unpaidLeave,
         });
 
-        console.log('=== API RESPONSE DEBUG ===');
-        console.log('Raw API Response:', response);
-        console.log('Response Data:', response.data);
-        console.log('Response Data Type:', typeof response.data);
-        console.log('Is Array:', Array.isArray(response.data));
-        
-        if (response.data) {
-          console.log('Response Data Keys:', Object.keys(response.data));
-          console.log('Response Data Values:', Object.values(response.data));
-        }
-        console.log('=== END API DEBUG ===');
-        
-        // Process the API response to extract leave data
-        if (response.data) {
-          const leaveData = response.data;
-          
-          // Calculate leave used from API data
-          let totalLeaveUsed = 0;
-          let medicalLeave = 0;
-          let unpaidLeave = 0;
-          
-          console.log('Processing leave data...');
-          
-          // Check if API returns an array of leave records
-          if (Array.isArray(leaveData)) {
-            console.log('API returned array with', leaveData.length, 'items');
-            leaveData.forEach((leave, index) => {
-              console.log(`Leave Record ${index}:`, leave);
-              
-              if (leave.status === 'approved' || leave.status === 'taken' || leave.status === 'Approved' || leave.status === 'Taken') {
-                const days = leave.days || leave.duration || 1;
-                totalLeaveUsed += days;
-                console.log(`Added ${days} days to total leave`);
-                
-                if (leave.type === 'medical' || leave.type === 'sick' || leave.leave_type === 'medical' || leave.leave_type === 'sick') {
-                  medicalLeave += days;
-                }
-                
-                if (leave.type === 'unpaid' || leave.leave_type === 'unpaid') {
-                  unpaidLeave += days;
-                }
-              }
-            });
-          } 
-          // Check if API returns summary data directly
-          else if (typeof leaveData === 'object') {
-            console.log('API returned object format');
-            
-            // Try different possible field names for leave count
-            totalLeaveUsed = leaveData.leaveUsed || leaveData.leave_used || 
-                           leaveData.totalLeaves || leaveData.total_leaves ||
-                           leaveData.usedLeaves || leaveData.used_leaves ||
-                           leaveData.count || leaveData.length || 0;
-                           
-            medicalLeave = leaveData.medicalLeave || leaveData.medical_leave || 
-                          leaveData.medicalCount || leaveData.medical_count || 0;
-                          
-            unpaidLeave = leaveData.unpaidLeave || leaveData.unpaid_leave ||
-                         leaveData.unpaidCount || leaveData.unpaid_count || 0;
-            
-            console.log('Extracted from object - Total:', totalLeaveUsed, 'Medical:', medicalLeave, 'Unpaid:', unpaidLeave);
-          }
-          // If data is a number directly
-          else if (typeof leaveData === 'number') {
-            console.log('API returned direct number:', leaveData);
-            totalLeaveUsed = leaveData;
-          }
-          
-          console.log('Final calculated values:');
-          console.log('Total Leave Used:', totalLeaveUsed);
-          console.log('Medical Leave:', medicalLeave);
-          console.log('Unpaid Leave:', unpaidLeave);
-          console.log('Available Leave:', Math.max(0, 14 - totalLeaveUsed));
-          
-          // Update attendance summary with real leave data
-          setAttendanceSummary(prev => ({
-            present: 0,
-            absent: 0, 
-            halfday: 0,
-            leaveUsed: totalLeaveUsed,
-            availableLeave: Math.max(0, 14 - totalLeaveUsed),
-            medical: medicalLeave,
-            unpaidLeave: unpaidLeave,
-          }));
-          
-          console.log('Updated attendance summary with leave data');
-        }
-        
+        // Process attendance data for display
+        const processedAttendance = processAttendanceData(
+          attendanceResult.data
+        );
+        setMonthlyAttendance(processedAttendance);
       } catch (error) {
-        console.error('Error fetching user leave:', error);
+        console.error("Error processing data:", error);
+      } finally {
+        setLoading(false);
       }
     };
 
-    fetchUserLeave();
-  }, [selectedMonth, selectedYear]);
+    fetchAndProcessData();
+  }, [selectedMonth, selectedYear, currentPage, fromDate, toDate]);
 
   const monthNames = [
     "January",
@@ -202,37 +397,22 @@ const AttendanceMobile = () => {
     "October",
     "November",
     "December",
+    "All",
   ];
 
-  const formatDate = (dateStr) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString("en-GB", {
-      day: "2-digit",
-      month: "long",
-      year: "numeric",
-    });
-  };
-
   const getStatusColor = (status) => {
-    switch (status) {
-      case "Present":
+    const normalizedStatus = status.toLowerCase();
+    switch (normalizedStatus) {
+      case "present":
         return "text-green-600 bg-green-50";
-      case "Absent":
+      case "absent":
         return "text-red-500 bg-red-50";
-      case "Halfday":
+      case "halfday":
         return "text-orange-500 bg-orange-50";
       default:
         return "text-gray-500 bg-gray-50";
     }
   };
-
-  const filteredAttendance = monthlyAttendance.filter((entry) => {
-    if (fromDate && new Date(entry.date) < new Date(fromDate)) return false;
-    if (toDate && new Date(entry.date) > new Date(toDate)) return false;
-    return true;
-  });
-
-
 
   return (
     <div className="max-w-sm mx-auto bg-gray-50 min-h-screen p-4">
@@ -251,6 +431,12 @@ const AttendanceMobile = () => {
           ))}
         </select>
       </div>
+
+      {loading && (
+        <div className="text-center py-4">
+          <div className="text-gray-500">Loading...</div>
+        </div>
+      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-3 gap-3 mb-6">
@@ -326,11 +512,20 @@ const AttendanceMobile = () => {
         </div>
       )}
 
+      {/* Items count info */}
+      {totalItems > 0 && (
+        <div className="text-sm text-gray-600 mb-3">
+          Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
+          {Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems}{" "}
+          records
+        </div>
+      )}
+
       {/* Attendance List */}
-      <div className="space-y-3">
-        {filteredAttendance.map((entry, idx) => (
+      <div className="space-y-3 mb-6">
+        {monthlyAttendance.map((entry, idx) => (
           <div
-            key={idx}
+            key={entry._id || idx}
             className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-100"
           >
             <div className="flex-1">
@@ -340,9 +535,6 @@ const AttendanceMobile = () => {
                 {new Date(entry.date).getFullYear()}
               </p>
               <p className="text-xs text-gray-500 mt-1">{entry.weekday}</p>
-              <p className="text-xs text-gray-600 mt-1">
-                {getOutTimeText(entry)}
-              </p>
             </div>
             <div className="flex flex-col items-end">
               <span
@@ -352,21 +544,84 @@ const AttendanceMobile = () => {
               >
                 {entry.status}
               </span>
+              {getOutTimeText(entry) && (
+                <p className="text-xs text-gray-600 mt-1">
+                  {getOutTimeText(entry)}
+                </p>
+              )}
               {entry.status === "Absent" && entry.leaveType && (
                 <span className="text-xs text-gray-500 mt-1">
-                  {/* ({entry.leaveType}) */}
+                  ({entry.leaveType})
                 </span>
               )}
             </div>
           </div>
         ))}
 
-        {filteredAttendance.length === 0 && (
+        {monthlyAttendance.length === 0 && !loading && (
           <div className="text-center py-8 text-gray-500">
             No attendance records found for the selected period.
           </div>
         )}
       </div>
+
+      {/* Pagination Section */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center space-x-2 py-4">
+          <button
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={currentPage === 1}
+            className={`flex items-center space-x-1 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+              currentPage === 1
+                ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                : "bg-indigo-50 text-indigo-600 hover:bg-indigo-100 active:bg-indigo-200"
+            }`}
+          >
+            <ChevronLeft size={16} />
+            <span>Previous</span>
+          </button>
+
+          {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+            let pageNum;
+            if (totalPages <= 5) {
+              pageNum = i + 1;
+            } else if (currentPage <= 3) {
+              pageNum = i + 1;
+            } else if (currentPage >= totalPages - 2) {
+              pageNum = totalPages - 4 + i;
+            } else {
+              pageNum = currentPage - 2 + i;
+            }
+
+            return (
+              <button
+                key={pageNum}
+                onClick={() => handlePageChange(pageNum)}
+                className={`w-10 h-10 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  pageNum === currentPage
+                    ? "bg-indigo-600 text-white shadow-md"
+                    : "bg-gray-50 text-gray-700 hover:bg-gray-100 active:bg-gray-200"
+                }`}
+              >
+                {pageNum}
+              </button>
+            );
+          })}
+
+          <button
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className={`flex items-center space-x-1 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+              currentPage === totalPages
+                ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                : "bg-indigo-50 text-indigo-600 hover:bg-indigo-100 active:bg-indigo-200"
+            }`}
+          >
+            <span>Next</span>
+            <ChevronRight size={16} />
+          </button>
+        </div>
+      )}
     </div>
   );
 };
