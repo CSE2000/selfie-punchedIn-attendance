@@ -1,18 +1,45 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { FaBell } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import defaultAvatar from "../assets/Ellipse.svg";
+import axios from "axios";
 
-function TopBar({
-  user = {
-    name: "Shubham Pandey",
-    role: "Frontend Developer",
-    image: null,
-  },
-  unreadCount = 0,
-  pageTitle = "",
-}) {
+function TopBar({ unreadCount = 0, pageTitle = "" }) {
   const navigate = useNavigate();
+  const [user, setUser] = useState({
+    name: "User",
+    role: "Employee",
+    image: null,
+  });
+  const [loading, setLoading] = useState(true);
+
+  const API_ENDPOINT = "https://attendancebackends.onrender.com/user/me";
+  const token = localStorage.getItem("token");
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const response = await axios.get(API_ENDPOINT, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        const userAuthData = response.data.data.panelData.userAuth?.[0] || {};
+        setUser({
+          name: userAuthData.userName || "User",
+          role: userAuthData.role || "Employee",
+          image: userAuthData.image || null,
+        });
+      } catch (err) {
+        console.error("Failed to fetch user data:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (token) {
+      fetchUser();
+    }
+  }, [token]);
 
   return (
     <div className="flex items-center justify-between bg-white px-6 py-4 shadow-md">
@@ -22,14 +49,16 @@ function TopBar({
           <img
             src={user.image || defaultAvatar}
             alt="Profile"
-            className="w-12 h-12 rounded-full object-cover"
+            className="w-12 h-12 rounded-full object-cover cursor-pointer"
             onClick={() => navigate("/profile")}
           />
           <div>
             <div className="text-lg font-semibold text-gray-800">
-              {user.name || "Unknown"}
+              {loading ? "Loading..." : user.name}
             </div>
-            <div className="text-sm text-gray-500">{user.role || "N/A"}</div>
+            <div className="text-sm text-gray-500">
+              {loading ? "..." : user.role}
+            </div>
           </div>
         </div>
       ) : (
@@ -38,7 +67,7 @@ function TopBar({
         </div>
       )}
 
-      {/* Right: Notification bell - show only on home */}
+      {/* Notification bell */}
       {pageTitle === "home" && (
         <button
           onClick={() => navigate("/notification")}

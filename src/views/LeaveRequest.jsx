@@ -5,7 +5,7 @@ import "react-datepicker/dist/react-datepicker.css";
 import { differenceInCalendarDays, format } from "date-fns";
 import Hr from "../assets/Ellipse 39.svg";
 
-const LeaveRequestPage = () => {
+const LeaveRequest = () => {
   const [leaveType, setLeaveType] = useState("Casual");
   const [tab, setTab] = useState("Review");
   const [startDate, setStartDate] = useState(null);
@@ -15,10 +15,13 @@ const LeaveRequestPage = () => {
   const [success, setSuccess] = useState(null);
   const [leaveRequests, setLeaveRequests] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
   const dayCount =
     startDate && endDate ? differenceInCalendarDays(endDate, startDate) + 1 : 0;
-  const getLeaveRequests = async () => {
+
+  const getLeaveRequests = async (page = 1) => {
     const token = localStorage.getItem("token");
     if (!token) {
       setError("User is not authenticated.");
@@ -27,18 +30,28 @@ const LeaveRequestPage = () => {
 
     try {
       setLoading(true);
-      const response = await axios.get("https://attendancebackends.onrender.com/userleave", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      // Fetch all pages or increase page size to get all data
+      const response = await axios.get(
+        `https://attendancebackends.onrender.com/userleave?page=${page}&limit=50`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
-      console.log("Fetched Leave Requests:", response.data);
       const leaveData =
         response.data.leaveData || response.data.data || response.data || [];
+
       setLeaveRequests(Array.isArray(leaveData) ? leaveData : []);
+      setCurrentPage(page);
+      if (response.data.totalPages) setTotalPages(response.data.totalPages);
     } catch (err) {
-      console.error("GET Error:", err);
+      console.error(
+        "API Error:",
+        err.response?.status,
+        err.response?.data || err.message
+      );
       setError(err.response?.data?.message || "Failed to load leave requests");
       setLeaveRequests([]);
     } finally {
@@ -46,7 +59,7 @@ const LeaveRequestPage = () => {
     }
   };
 
-  console.log("Leave Requests:", leaveRequests);
+  // console.log("Leave Requests:", leaveRequests);
 
   // Submit leave request (POST)
   const handleSubmit = async () => {
@@ -72,6 +85,7 @@ const LeaveRequestPage = () => {
         to: format(endDate, "yyyy-MM-dd"),
         reason,
       };
+      console.log(leaveType);
 
       console.log("Submitting payload:", payload);
 
@@ -98,7 +112,8 @@ const LeaveRequestPage = () => {
       setTab("Review");
 
       // Refresh data immediately to get the latest request
-      await getLeaveRequests();
+      await getLeaveRequests(1); // Reset to page 1 after new submission
+      setCurrentPage(1);
     } catch (err) {
       console.error("POST Error:", err);
       setError(err.response?.data?.message || "Failed to submit leave request");
@@ -108,7 +123,7 @@ const LeaveRequestPage = () => {
   };
 
   useEffect(() => {
-    getLeaveRequests();
+    getLeaveRequests(1);
   }, []);
 
   // Helper function to get status for filtering
@@ -125,23 +140,38 @@ const LeaveRequestPage = () => {
     }
   };
 
-  // Filter leave requests based on current tab and get only the latest one
-  const filteredLeaveRequests = leaveRequests.filter((leave) => {
-    const statusOptions = getStatusForTab(tab);
-    return statusOptions.some(
-      (status) => leave.status?.toLowerCase() === status.toLowerCase()
-    );
-  });
+  // Filter leave requests based on current tab - Show ALL if Review tab has no pending
+  const filteredLeaveRequests = (() => {
+    if (tab === "Review") {
+      // First check if there are any pending requests
+      const pendingRequests = leaveRequests.filter((leave) =>
+        ["pending", "review", "submitted"].some(
+          (status) => leave.status?.toLowerCase() === status.toLowerCase()
+        )
+      );
 
-  // Get only the most recent request - Fixed sorting logic
-  const latestRequest = filteredLeaveRequests
-    .slice()
-    .sort((a, b) => {
-      const dateA = new Date(a.createdAt || a._id);
-      const dateB = new Date(b.createdAt || b._id);
-      return dateB - dateA;
-    })
-    .slice(0, 1);
+      // If no pending requests found, show all requests in Review tab
+      if (pendingRequests.length === 0) {
+        return leaveRequests;
+      }
+      return pendingRequests;
+    }
+
+    // For other tabs, filter normally
+    const statusOptions = getStatusForTab(tab);
+    return leaveRequests.filter((leave) => {
+      return statusOptions.some(
+        (status) => leave.status?.toLowerCase() === status.toLowerCase()
+      );
+    });
+  })();
+
+  // Handle tab change and reset pagination
+  const handleTabChange = (newTab) => {
+    setTab(newTab);
+    setCurrentPage(1);
+    getLeaveRequests(1);
+  };
 
   return (
     <div className="max-w-md mx-auto bg-white rounded-lg shadow-md text-sm p-4">
@@ -224,7 +254,7 @@ const LeaveRequestPage = () => {
           {["Review", "Approved", "Rejected"].map((t) => (
             <button
               key={t}
-              onClick={() => setTab(t)}
+              onClick={() => handleTabChange(t)}
               className={`px-3 py-1 rounded-full border ${
                 tab === t
                   ? "bg-purple-600 text-white border-purple-600"
@@ -243,9 +273,10 @@ const LeaveRequestPage = () => {
           </div>
         )}
 
-        {/* Leave Cards - Show only the latest request */}
-        {!loading && latestRequest.length > 0
-          ? latestRequest.map((leave) => {
+        {/* Leave Cards - Show all filtered requests */}
+        {!loading && filteredLeaveRequests.length > 0 ? (
+          <>
+            {filteredLeaveRequests.map((leave) => {
               const fromDate = new Date(leave.from);
               const toDate = new Date(leave.to);
               const days = differenceInCalendarDays(toDate, fromDate) + 1;
@@ -307,11 +338,43 @@ const LeaveRequestPage = () => {
                   </div>
                 </div>
               );
-            })
-          : null}
+            })}
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex justify-center items-center mt-4 gap-2 text-xs">
+                <button
+                  onClick={() => getLeaveRequests(currentPage - 1)}
+                  disabled={currentPage === 1 || loading}
+                  className="px-3 py-1 border rounded disabled:opacity-50"
+                >
+                  Prev
+                </button>
+                <span className="text-gray-600">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <button
+                  onClick={() => getLeaveRequests(currentPage + 1)}
+                  disabled={currentPage === totalPages || loading}
+                  className="px-3 py-1 border rounded disabled:opacity-50"
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </>
+        ) : !loading && tab === "Review" ? (
+          <div className="text-center text-gray-500 text-xs py-4">
+            All leave requests are shown above
+          </div>
+        ) : !loading ? (
+          <div className="text-center text-gray-500 text-xs py-4">
+            No {tab.toLowerCase()} leave requests found
+          </div>
+        ) : null}
       </div>
     </div>
   );
 };
 
-export default LeaveRequestPage;
+export default LeaveRequest;

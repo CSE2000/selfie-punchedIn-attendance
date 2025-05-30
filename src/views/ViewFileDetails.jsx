@@ -6,7 +6,6 @@ const ViewFileDetail = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // You are passing an array of files as state directly, so get it like this:
   const uploadedFiles = location.state || [];
 
   const goBack = () => {
@@ -28,7 +27,6 @@ const ViewFileDetail = () => {
     );
   }
 
-  // Friendly labels map for the keys used in EmployeeInfo
   const labelsMap = {
     panCard: "PAN Card Image",
     adharCard: "Aadhar Card Image",

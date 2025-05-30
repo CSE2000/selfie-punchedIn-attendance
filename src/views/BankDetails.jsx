@@ -298,8 +298,7 @@ const BankDetailsForm = () => {
           setUploadedFile(null);
         }
       }
-      setTimeout(() => {
-      }, 2000);
+      setTimeout(() => {}, 2000);
     } catch (err) {
       setError(
         err.response?.data?.message ||
@@ -310,17 +309,6 @@ const BankDetailsForm = () => {
       setLoading(false);
     }
   };
-
-  // Show loading spinner while fetching data
-  if (fetchingData) {
-    return (
-      <div className="max-w-md mx-auto min-h-screen bg-white py-4 sm:hidden flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-lg">Loading bank details...</div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-white py-4 sm:hidden">

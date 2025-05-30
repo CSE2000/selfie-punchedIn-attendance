@@ -3,7 +3,7 @@ import { Calendar, Filter, ChevronLeft, ChevronRight } from "lucide-react";
 import axios from "axios";
 
 const AttendanceMobile = () => {
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+  const [selectedMonth, setSelectedMonth] = useState(12); // Default to "All" (index 12)
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
@@ -27,24 +27,8 @@ const AttendanceMobile = () => {
   const [monthlyAttendance, setMonthlyAttendance] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // Company holidays data
-  const companyHolidays = [
-    "2025-01-01", // New Year
-    "2025-01-26", // Republic Day
-    "2025-03-14", // Holi
-    "2025-08-09", // Raksha Bandhan
-    "2025-08-15", // Independence Day
-    "2025-08-16", // Janmashtami
-    "2025-10-02", // Gandhi Jayanti
-    "2025-10-20", // Karva Chauth
-    "2025-10-21", // Diwali
-    "2025-10-22", // Bhai Dooj
-    "2025-12-25", // Christmas
-  ];
-
   const isWeekendOrHoliday = (date) => {
     const dayOfWeek = date.getDay();
-    const dateStr = date.toISOString().split("T")[0];
 
     // Sunday is always holiday
     if (dayOfWeek === 0) return true;
@@ -60,20 +44,17 @@ const AttendanceMobile = () => {
       }
     }
 
-    // Company holidays (festivals)
-    if (companyHolidays.includes(dateStr)) return true;
-
     return false;
   };
 
-  // Format time from ISO string to readable format
+  // Format time from ISO string to 24-hour format
   const formatTime = (isoString) => {
     if (!isoString) return "";
     const date = new Date(isoString);
-    return date.toLocaleTimeString("en-US", {
+    return date.toLocaleTimeString("en-GB", {
       hour: "2-digit",
       minute: "2-digit",
-      hour12: true,
+      hour12: false,
     });
   };
 
@@ -97,7 +78,11 @@ const AttendanceMobile = () => {
   };
 
   // Fetch attendance data with pagination
-  const fetchAttendanceData = async (page = 1, limit = 10) => {
+  const fetchAttendanceData = async (
+    page = 1,
+    limit = 10,
+    forSummary = false
+  ) => {
     try {
       const token = localStorage.getItem("token");
       if (!token) {
@@ -108,10 +93,10 @@ const AttendanceMobile = () => {
       // Build query parameters
       const params = new URLSearchParams({
         page: page.toString(),
-        limit: limit.toString(),
+        limit: forSummary ? "1000" : limit.toString(), // Get all data for summary calculation
       });
 
-      // Add month/year filters if not "All"
+      // Add month filter - only if not "All" (selectedMonth !== 12)
       if (selectedMonth !== 12) {
         params.append("month", (selectedMonth + 1).toString());
       }
@@ -120,6 +105,8 @@ const AttendanceMobile = () => {
       // Add date range filters if set
       if (fromDate) params.append("fromDate", fromDate);
       if (toDate) params.append("toDate", toDate);
+
+      console.log(`Fetching attendance data with params: ${params.toString()}`);
 
       const response = await axios.get(
         `https://attendancebackends.onrender.com/data?${params.toString()}`,
@@ -206,49 +193,98 @@ const AttendanceMobile = () => {
     }
   };
 
-  // Calculate leave statistics
+  // Calculate leave statistics - FIXED for proper yearly/monthly handling
   const calculateLeaveStats = (leaveData, year, month = null) => {
     let totalLeaveUsed = 0;
     let medicalLeave = 0;
     let unpaidLeave = 0;
+    let yearlyLeaveUsed = 0; // Always calculate yearly for availableLeave
+
+    console.log(`Calculating leave stats for year: ${year}, month: ${month}`);
 
     leaveData.forEach((leave) => {
       const leaveFromDate = new Date(leave.from);
+      const leaveToDate = new Date(leave.to);
       const leaveYear = leaveFromDate.getFullYear();
-      const leaveMonth = leaveFromDate.getMonth();
 
-      // Filter by year and month if specified
+      // Filter by year
       if (year && leaveYear !== year) return;
-      if (month !== null && leaveMonth !== month) return;
 
       // Only count approved leaves
       if (leave.status === "approved" || leave.status === "Approved") {
         const days = leave.totaldays || 1;
-        totalLeaveUsed += days;
 
-        if (leave.leaveType === "Medical" || leave.leaveType === "medical") {
-          medicalLeave += days;
-        }
+        // Always calculate yearly leave used for availableLeave calculation
+        yearlyLeaveUsed += days;
 
-        if (leave.type === "unpaid") {
-          unpaidLeave += days;
+        // For monthly filtering, only count leaves that fall in the selected month
+        if (month !== null) {
+          const leaveFromMonth = leaveFromDate.getMonth();
+          const leaveToMonth = leaveToDate.getMonth();
+
+          // Check if leave spans the selected month
+          if (
+            leaveFromMonth === month ||
+            leaveToMonth === month ||
+            (leaveFromMonth < month && leaveToMonth > month)
+          ) {
+            totalLeaveUsed += days;
+
+            if (
+              leave.leaveType === "Medical" ||
+              leave.leaveType === "medical"
+            ) {
+              medicalLeave += days;
+            }
+
+            if (leave.type === "unpaid") {
+              unpaidLeave += days;
+            }
+          }
+        } else {
+          // For "All" months, count all leaves for the year
+          totalLeaveUsed += days;
+
+          if (leave.leaveType === "Medical" || leave.leaveType === "medical") {
+            medicalLeave += days;
+          }
+
+          if (leave.type === "unpaid") {
+            unpaidLeave += days;
+          }
         }
       }
     });
+
+    console.log(
+      `Leave stats calculated: totalLeaveUsed=${totalLeaveUsed}, yearlyLeaveUsed=${yearlyLeaveUsed}, medicalLeave=${medicalLeave}, unpaidLeave=${unpaidLeave}`
+    );
 
     return {
       totalLeaveUsed,
       medicalLeave,
       unpaidLeave,
-      availableLeave: Math.max(0, 14 - totalLeaveUsed),
+      // Always calculate availableLeave based on yearly data
+      availableLeave: Math.max(0, 14 - yearlyLeaveUsed),
     };
   };
 
-  // Calculate attendance statistics (for summary) - FIXED
+  // Calculate attendance statistics (for summary) - FIXED for proper monthly filtering
   const calculateAttendanceStats = (attendanceData, year, month = null) => {
     let present = 0;
     let absent = 0;
     let halfday = 0;
+
+    console.log(
+      `Calculating attendance stats for year: ${year}, month: ${month}`
+    );
+    console.log(`Processing ${attendanceData.length} attendance records`);
+
+    // If no attendance data for the selected filters, return zeros
+    if (attendanceData.length === 0) {
+      console.log("No attendance data found for the selected filters");
+      return { present: 0, absent: 0, halfday: 0 };
+    }
 
     // Group by date to handle multiple punch entries for same date
     const dateGroups = {};
@@ -259,8 +295,10 @@ const AttendanceMobile = () => {
       const recordMonth = recordDate.getMonth();
       const dateKey = record.date;
 
-      // Filter by year and month if specified
+      // Filter by year
       if (year && recordYear !== year) return;
+
+      // Filter by month if not "All" (month !== null)
       if (month !== null && recordMonth !== month) return;
 
       // Skip weekends and holidays for absence calculation
@@ -268,16 +306,25 @@ const AttendanceMobile = () => {
         // Keep the latest status for the date (or you can implement your own logic)
         if (
           !dateGroups[dateKey] ||
-          new Date(record.punchIn) > new Date(dateGroups[dateKey].punchIn)
+          new Date(record.punchIn || record.createdAt) >
+            new Date(
+              dateGroups[dateKey].punchIn || dateGroups[dateKey].createdAt
+            )
         ) {
           dateGroups[dateKey] = record;
         }
       }
     });
 
+    console.log(
+      `Grouped attendance data by date: ${
+        Object.keys(dateGroups).length
+      } unique dates`
+    );
+
     // Count statistics from grouped data
     Object.values(dateGroups).forEach((record) => {
-      const status = record.status.toLowerCase();
+      const status = (record.status || "").toLowerCase();
       switch (status) {
         case "present":
           present++;
@@ -288,15 +335,52 @@ const AttendanceMobile = () => {
         case "halfday":
           halfday++;
           break;
+        default:
+          if (status) present++;
+          break;
       }
     });
+
+    console.log(
+      `Attendance stats calculated: present=${present}, absent=${absent}, halfday=${halfday}`
+    );
 
     return { present, absent, halfday };
   };
 
-  // Process attendance data for display - FIXED
+  // Process attendance data for display with client-side filtering
   const processAttendanceData = (attendanceData) => {
-    return attendanceData.map((record) => ({
+    // First filter the data based on selected month and year
+    const filteredData = attendanceData.filter((record) => {
+      const recordDate = new Date(record.date);
+      const recordYear = recordDate.getFullYear();
+      const recordMonth = recordDate.getMonth();
+
+      // Filter by year
+      if (selectedYear && recordYear !== selectedYear) return false;
+
+      // Filter by month if not "All" (selectedMonth !== 12)
+      if (selectedMonth !== 12 && recordMonth !== selectedMonth) return false;
+
+      // Filter by date range if provided
+      if (fromDate) {
+        const fromDateObj = new Date(fromDate);
+        if (recordDate < fromDateObj) return false;
+      }
+
+      if (toDate) {
+        const toDateObj = new Date(toDate);
+        if (recordDate > toDateObj) return false;
+      }
+
+      return true;
+    });
+
+    console.log(
+      `Filtered attendance data: ${filteredData.length} records out of ${attendanceData.length} total records`
+    );
+
+    return filteredData.map((record) => ({
       ...record,
       weekday: new Date(record.date).toLocaleDateString("en-US", {
         weekday: "long",
@@ -325,19 +409,31 @@ const AttendanceMobile = () => {
     const fetchAndProcessData = async () => {
       setLoading(true);
       try {
-        // Fetch paginated attendance data
+        console.log(
+          `Fetching data for month: ${selectedMonth}, year: ${selectedYear}`
+        );
+
+        // Fetch paginated attendance data for display
         const attendanceResult = await fetchAttendanceData(
           currentPage,
-          itemsPerPage
+          itemsPerPage,
+          false
         );
+
+        // Fetch ALL attendance data for summary calculation
+        const allAttendanceResult = await fetchAttendanceData(1, 1000, true);
 
         // Fetch leave data (not paginated as it's used for summary)
         const leaveData = await fetchLeaveData();
 
-        console.log("Fetched attendance result:", attendanceResult);
+        console.log("Fetched paginated attendance result:", attendanceResult);
+        console.log(
+          "Fetched all attendance result for summary:",
+          allAttendanceResult
+        );
         console.log("Fetched leave data:", leaveData);
 
-        // Update pagination state
+        // Update pagination state from paginated result
         setTotalPages(attendanceResult.totalPages);
         setTotalItems(attendanceResult.totalItems);
 
@@ -345,13 +441,18 @@ const AttendanceMobile = () => {
         const filterYear = selectedYear;
         const filterMonth = selectedMonth === 12 ? null : selectedMonth;
 
-        // Calculate leave statistics
+        console.log(
+          `Filter parameters: year=${filterYear}, month=${filterMonth}`
+        );
+
+        // Calculate leave statistics using ALL data
         const leaveStats = calculateLeaveStats(
           leaveData,
           filterYear,
           filterMonth
         );
-        const allAttendanceResult = await fetchAttendanceData(1, 1000);
+
+        // Calculate attendance statistics using ALL data
         const attendanceStats = calculateAttendanceStats(
           allAttendanceResult.data,
           filterYear,
@@ -369,13 +470,49 @@ const AttendanceMobile = () => {
           unpaidLeave: leaveStats.unpaidLeave,
         });
 
-        // Process attendance data for display
+        console.log("Updated attendance summary:", {
+          present: attendanceStats.present,
+          absent: attendanceStats.absent,
+          halfday: attendanceStats.halfday,
+          leaveUsed: leaveStats.totalLeaveUsed,
+          availableLeave: leaveStats.availableLeave,
+          medical: leaveStats.medicalLeave,
+          unpaidLeave: leaveStats.unpaidLeave,
+        });
+
+        // Process attendance data for display (only paginated data)
+        // Apply client-side filtering to ensure correct data
         const processedAttendance = processAttendanceData(
           attendanceResult.data
         );
-        setMonthlyAttendance(processedAttendance);
+
+        // If after processing/filtering no data remains, show empty list
+        if (processedAttendance.length === 0) {
+          console.log(
+            "No attendance data found after filtering - setting empty list"
+          );
+          setMonthlyAttendance([]);
+        } else {
+          console.log(
+            `Setting ${processedAttendance.length} processed attendance records`
+          );
+          setMonthlyAttendance(processedAttendance);
+        }
       } catch (error) {
         console.error("Error processing data:", error);
+        // Reset all data on error including attendance list
+        setAttendanceSummary({
+          present: 0,
+          absent: 0,
+          halfday: 0,
+          leaveUsed: 0,
+          availableLeave: 14,
+          medical: 0,
+          unpaidLeave: 0,
+        });
+        setMonthlyAttendance([]);
+        setTotalPages(1);
+        setTotalItems(0);
       } finally {
         setLoading(false);
       }
@@ -397,7 +534,7 @@ const AttendanceMobile = () => {
     "October",
     "November",
     "December",
-    "All",
+    "All", // Index 12
   ];
 
   const getStatusColor = (status) => {
@@ -432,11 +569,14 @@ const AttendanceMobile = () => {
         </select>
       </div>
 
-      {loading && (
-        <div className="text-center py-4">
-          <div className="text-gray-500">Loading...</div>
-        </div>
-      )}
+      {/* Display current filter info */}
+      <div className="mb-4 text-sm text-gray-600">
+        Showing data for:{" "}
+        <span className="font-semibold">
+          {selectedMonth === 12 ? "All months" : monthNames[selectedMonth]}{" "}
+          {selectedYear}
+        </span>
+      </div>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-3 gap-3 mb-6">
@@ -473,8 +613,8 @@ const AttendanceMobile = () => {
         <SummaryCard
           label="Available Leave"
           value={attendanceSummary.availableLeave}
-          bgColor="bg-gray-100"
-          textColor="text-gray-700"
+          bgColor="bg-yellow-100"
+          textColor="text-yellow-800"
         />
       </div>
 
@@ -512,12 +652,10 @@ const AttendanceMobile = () => {
         </div>
       )}
 
-      {/* Items count info */}
-      {totalItems > 0 && (
-        <div className="text-sm text-gray-600 mb-3">
-          Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
-          {Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems}{" "}
-          records
+      {/* Loading indicator */}
+      {loading && (
+        <div className="text-center py-8 text-gray-500">
+          Loading attendance data...
         </div>
       )}
 
@@ -567,7 +705,7 @@ const AttendanceMobile = () => {
 
       {/* Pagination Section */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-center space-x-2 py-4">
+        <div className="flex items-center justify-center space-x-2 py-8 sticky pb-8">
           <button
             onClick={() => handlePageChange(currentPage - 1)}
             disabled={currentPage === 1}

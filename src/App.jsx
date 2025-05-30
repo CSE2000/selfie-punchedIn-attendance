@@ -2,7 +2,6 @@ import React from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import MainLayout from "./layouts/MainLayout";
 import AttendanceDetails from "./views/AttendanceDetail";
-import SelfieLocationPunchIn from "./views/SelfieLocationPunchedIn";
 import Profile from "./views/Profile";
 import BankDetails from "./views/BankDetails";
 import EmployeeInfo from "./views/EmployeeInfo";

@@ -148,37 +148,7 @@ export default function LoginPage() {
         >
           {isLoading ? "Signing in..." : "Sign In"}
         </button>
-        {/* <button
-          type="submit"
-          className="w-full bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white py-3 rounded-md text-sm font-semibold shadow-md transition"
-        >
-          Sign In
-        </button> */}
       </form>
     </div>
   );
 }
-
-// import React, { useState } from "react";
-// import loginImage from "../assets/loginImage.svg";
-
-// export default function LoginPage() {
-//   const [userId, setUserId] = useState("");
-//   const [pin, setPin] = useState(["", "", "", ""]);
-
-//   const handlePinChange = (index, value) => {
-//     if (value.length > 1) return;
-//     const newPin = [...pin];
-//     newPin[index] = value;
-//     setPin(newPin);
-//     if (value && index < 3) {
-//       document.getElementById(`pin-${index + 1}`).focus();
-//     }
-//   };
-
-//   const handleSubmit = (e) => {
-//     e.preventDefault();
-//     const passcode = pin.join("");
-//     console.log("User ID:", userId);
-//     console.log("Passcode:", passcode);
-//   };

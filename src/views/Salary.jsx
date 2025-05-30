@@ -1,143 +1,352 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
-import { Download, ChevronRight } from "lucide-react";
+import { Download, ChevronRight, Loader2 } from "lucide-react";
 
-const SalaryInfo = () => {
+const Salary = () => {
   const [salaryData, setSalaryData] = useState([]);
-  const [selectedMonthIndex, setSelectedMonthIndex] = useState(0);
+  const [leaveData, setLeaveData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedRecord, setSelectedRecord] = useState(0);
 
+  // Calculate working days in a month (excluding Sundays and 1st/2nd Saturdays)
+  const getWorkingDaysInMonth = (year, month) => {
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    let workingDays = 0;
+    let saturdayCount = 0;
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(year, month, day);
+      const dayOfWeek = date.getDay();
+
+      // Skip Sundays (0)
+      if (dayOfWeek === 0) continue;
+
+      // Count Saturdays and skip 1st and 2nd Saturday
+      if (dayOfWeek === 6) {
+        saturdayCount++;
+        if (saturdayCount <= 2) continue;
+      }
+
+      workingDays++;
+    }
+
+    return workingDays;
+  };
+
+  // Calculate attendance for a specific month/year
+  const calculateAttendance = (salaryRecord, leaves) => {
+    const recordDate = new Date(salaryRecord.createdAt);
+    const year = recordDate.getFullYear();
+    const month = recordDate.getMonth();
+
+    // Filter leaves for the specific month and year that are approved
+    const monthLeaves = leaves.filter((leave) => {
+      const leaveFromDate = new Date(leave.from);
+      const leaveToDate = new Date(leave.to);
+      const monthStart = new Date(year, month, 1);
+      const monthEnd = new Date(year, month + 1, 0);
+
+      // Only count approved leaves for the specific month
+      return (
+        leave.status === "approved" &&
+        leaveFromDate <= monthEnd &&
+        leaveToDate >= monthStart
+      );
+    });
+
+    let paidLeave = 0;
+    let sickLeave = 0;
+    let unpaidLeave = 0;
+
+    // Calculate leave days based on actual API structure
+    monthLeaves.forEach((leave) => {
+      const totalDays = leave.totaldays || 1;
+
+      // Count Medical leaves as sick leave
+      if (leave.leaveType === "Medical") {
+        sickLeave += totalDays;
+      }
+
+      // Count by payment type
+      if (leave.type === "paid") {
+        paidLeave += totalDays;
+      } else if (leave.type === "unpaid") {
+        unpaidLeave += totalDays;
+      }
+    });
+
+    // Get total working days for the month
+    const totalWorkingDays = getWorkingDaysInMonth(year, month);
+
+    // Calculate present days (using salary data if available, otherwise calculate)
+    const presentDays =
+      salaryRecord.present || totalWorkingDays - paidLeave - unpaidLeave;
+
+    return {
+      present: presentDays,
+      paidleave: paidLeave,
+      sickleave: sickLeave,
+      unpaidleave: unpaidLeave,
+    };
+  };
+
+  // Fetch both salary and leave data
   useEffect(() => {
-    const fetchSalaryData = async () => {
-      setLoading(true);
-      setError(null);
-
+    const fetchData = async () => {
       try {
-        const token = localStorage.getItem("token");
-        console.log("Token from localStorage:", token);
+        setLoading(true);
 
-        if (!token) throw new Error("No auth token found");
+        // Get token from localStorage
+        const token =
+          localStorage.getItem("token") ||
+          localStorage.getItem("authToken") ||
+          localStorage.getItem("accessToken");
 
-        console.log("Sending GET request to salary API...");
+        if (!token) {
+          throw new Error("No authentication token found. Please login again.");
+        }
 
-        const response = await axios.get(
+        // Validate token format
+        if (token.trim() === "" || token === "undefined" || token === "null") {
+          throw new Error("Invalid authentication token. Please login again.");
+        }
+
+        // Fetch salary data
+        const salaryResponse = await fetch(
           "https://attendancebackends.onrender.com/admin/salarydetails/user",
           {
+            method: "GET",
             headers: {
               Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
             },
           }
         );
 
-        console.log("Response status:", response.status);
-        console.log("Response data:", response.data);
-
-        const data = response.data;
-
-        if (!Array.isArray(data)) {
-          throw new Error("Unexpected data format from backend");
+        if (salaryResponse.status === 401) {
+          throw new Error("Authentication failed. Please login again.");
         }
 
-        setSalaryData(data);
-        setSelectedMonthIndex(0);
-      } catch (err) {
-        console.error("Error fetching salary data:", err);
-        setError(
-          err.response?.data?.message ||
-            err.message ||
-            "Failed to fetch salary data"
+        if (!salaryResponse.ok) {
+          throw new Error(`Salary API error! status: ${salaryResponse.status}`);
+        }
+
+        const salaryResult = await salaryResponse.json();
+
+        // Fetch leave data
+        const leaveResponse = await fetch(
+          "https://attendancebackends.onrender.com/userleave",
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          }
         );
+
+        if (leaveResponse.status === 401) {
+          throw new Error("Authentication failed. Please login again.");
+        }
+
+        if (!leaveResponse.ok) {
+          throw new Error(`Leave API error! status: ${leaveResponse.status}`);
+        }
+
+        const leaveResult = await leaveResponse.json();
+
+        // Process salary data
+        if (
+          salaryResult.message === "Fetched successfully" &&
+          salaryResult.data
+        ) {
+          const sortedSalaryData = salaryResult.data.sort(
+            (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+          );
+          setSalaryData(sortedSalaryData);
+        } else {
+          setSalaryData([]);
+        }
+
+        // Process leave data
+        if (leaveResult.leaveData) {
+          setLeaveData(leaveResult.leaveData);
+        } else {
+          setLeaveData([]);
+        }
+      } catch (err) {
+        console.error("Error fetching data:", err);
+        setError(err.message);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchSalaryData();
+    fetchData();
   }, []);
 
-  if (loading) return <div className="max-w-sm mx-auto p-4">Loading...</div>;
-  if (error)
+  // Format date to readable format
+  const formatDate = (dateString) => {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    return date.toLocaleDateString("en-IN", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  };
+
+  // Format month and year from date
+  const formatMonthYear = (dateString) => {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    return date.toLocaleDateString("en-IN", {
+      year: "numeric",
+      month: "long",
+    });
+  };
+
+  // Get status color
+  const getStatusColor = (status) => {
+    switch (status?.toLowerCase()) {
+      case "pending":
+        return "text-orange-600 bg-orange-50 border-orange-200";
+      case "approved":
+        return "text-green-600 bg-green-50 border-green-200";
+      case "rejected":
+        return "text-red-600 bg-red-50 border-red-200";
+      default:
+        return "text-gray-600 bg-gray-50 border-gray-200";
+    }
+  };
+
+  if (loading) {
     return (
-      <div className="max-w-sm mx-auto p-4 text-red-600">Error: {error}</div>
+      <div className="max-w-sm mx-auto bg-white min-h-screen flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="animate-spin text-purple-600" size={32} />
+          <span className="text-sm text-gray-600">Loading salary data...</span>
+        </div>
+      </div>
     );
-  if (salaryData.length === 0)
-    return <div className="max-w-sm mx-auto p-4">No salary data found.</div>;
+  }
 
-  const selectedMonthData = salaryData[selectedMonthIndex];
+  if (error) {
+    return (
+      <div className="max-w-sm mx-auto bg-white min-h-screen flex items-center justify-center">
+        <div className="text-center p-6">
+          <div className="text-red-400 mb-2">⚠️</div>
+          <h3 className="text-sm font-semibold text-gray-800 mb-2">
+            Error Loading Data
+          </h3>
+          <p className="text-xs text-gray-600">{error}</p>
+        </div>
+      </div>
+    );
+  }
 
-  const {
-    month,
-    totalDays,
-    workingDays,
-    present,
-    paidLeave,
-    sickLeave,
-    unpaidLeave,
-    payableSalary,
-    baseSalary,
-  } = selectedMonthData;
+  if (!salaryData.length) {
+    return (
+      <div className="max-w-sm mx-auto bg-white min-h-screen flex items-center justify-center">
+        <div className="text-center p-6">
+          <div className="text-gray-400 mb-2">📊</div>
+          <h3 className="text-sm font-semibold text-gray-800 mb-2">
+            No Salary Data
+          </h3>
+          <p className="text-xs text-gray-600">No salary records found</p>
+        </div>
+      </div>
+    );
+  }
+
+  const currentRecord = salaryData[selectedRecord];
+  const attendanceData = calculateAttendance(currentRecord, leaveData);
 
   return (
-    <div className="max-w-sm mx-auto bg-white min-h-screen p-4">
+    <div className="max-w-sm mx-auto bg-white min-h-screen">
       {/* Header */}
       <div className="pb-20">
         <div className="bg-gray-50 rounded-xl p-4 mb-6 border border-gray-100">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-sm font-semibold text-gray-700">
-              This Month's Salary
+              Salary Details
             </h3>
             <select
-              value={selectedMonthIndex}
-              onChange={(e) => setSelectedMonthIndex(parseInt(e.target.value))}
+              value={selectedRecord}
+              onChange={(e) => setSelectedRecord(parseInt(e.target.value))}
               className="text-sm bg-white border border-gray-300 rounded-lg px-3 py-1.5 font-medium"
             >
-              {salaryData.map((item, i) => (
-                <option key={i} value={i}>
-                  {item.month || `Month ${i + 1}`}
+              {salaryData.map((record, index) => (
+                <option key={record._id} value={index}>
+                  {new Date(record.createdAt).toLocaleString("default", {
+                    month: "long",
+                  })}
                 </option>
               ))}
             </select>
           </div>
 
+          {/* Attendance Info */}
           <div className="space-y-2 mb-4">
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Present</span>
-              <span className="font-medium text-gray-800">{present} Days</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Paid leaves</span>
-              <span className="font-medium text-gray-800">
-                {paidLeave} days
+              <span className="text-gray-600">Present Days</span>
+              <span className="font-medium text-green-600">
+                {attendanceData.present}
               </span>
             </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Sick leaves</span>
-              <span className="font-medium text-gray-800">
-                {sickLeave} days
-              </span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Unpaid leaves</span>
-              <span className="font-medium text-gray-800">
-                {unpaidLeave} days
-              </span>
-            </div>
+            {attendanceData.paidleave > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Paid Leave</span>
+                <span className="font-medium text-blue-600">
+                  {attendanceData.paidleave}
+                </span>
+              </div>
+            )}
+            {attendanceData.sickleave > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Sick Leave</span>
+                <span className="font-medium text-orange-600">
+                  {attendanceData.sickleave}
+                </span>
+              </div>
+            )}
+            {attendanceData.unpaidleave > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Unpaid Leave</span>
+                <span className="font-medium text-red-600">
+                  {attendanceData.unpaidleave}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Salary Breakdown */}
+          <div className="space-y-2 mb-4">
+            {(currentRecord.addOnAmount || currentRecord.addOn) && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">
+                  Add-on ({currentRecord.addOnType || "bonus"})
+                </span>
+                <span className="font-medium text-green-600">
+                  +₹{currentRecord.addOnAmount || currentRecord.addOn || 0}
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="border-t border-gray-200 pt-3 mb-4">
-            <div className="flex justify-between items-center">
+            <div className="flex justify-between items-center mb-2">
               <span className="text-sm font-semibold text-gray-800">
-                Payable salary
+                Payable Salary
               </span>
               <span className="text-lg font-bold text-gray-900">
-                ₹{payableSalary}
+                ₹{currentRecord.payable || 0}
               </span>
             </div>
           </div>
 
           <div className="flex justify-between items-center">
-            <span className="text-xs text-gray-500">Download info</span>
+            <span className="text-xs text-gray-500">Download Invoice</span>
             <button className="flex items-center gap-1.5 text-xs text-purple-600 border border-purple-200 bg-purple-50 px-3 py-1.5 rounded-full hover:bg-purple-100 transition-colors">
               <span>Download</span>
               <Download size={12} />
@@ -151,27 +360,24 @@ const SalaryInfo = () => {
             Salary History
           </h3>
           <div className="space-y-2 pb-4">
-            {salaryData.map((item, i) => (
+            {salaryData.map((record, index) => (
               <div
-                key={i}
-                className="flex justify-between items-center px-4 py-3 rounded-xl bg-gray-50 border border-gray-100 hover:bg-gray-100 transition-colors cursor-pointer"
-                onClick={() => setSelectedMonthIndex(i)}
+                key={record._id}
+                onClick={() => setSelectedRecord(index)}
+                className={`flex justify-between items-center px-4 py-3 rounded-xl border transition-colors cursor-pointer ${
+                  selectedRecord === index
+                    ? "bg-purple-50 border-purple-200"
+                    : "bg-gray-50 border-gray-100 hover:bg-gray-100"
+                }`}
               >
-                <div>
-                  <span className="text-sm font-medium text-gray-800">
-                    {item.month}
-                  </span>
-                  <p className="text-xs text-gray-500">
-                    {item.present + item.paidLeave + item.sickLeave}/
-                    {item.workingDays} paid days
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-gray-900">
-                    ₹{item.payableSalary?.toLocaleString()}
-                  </span>
-                  <ChevronRight size={16} className="text-gray-400" />
-                </div>
+                <span className="text-sm font-medium text-gray-800">
+                  {new Date(record.createdAt).toLocaleString("default", {
+                    month: "long",
+                  })}
+                </span>
+                <span className="text-sm font-bold text-gray-900">
+                  ₹{(record.payable || 0).toLocaleString()}
+                </span>
               </div>
             ))}
           </div>
@@ -181,193 +387,135 @@ const SalaryInfo = () => {
   );
 };
 
-export default SalaryInfo;
+export default Salary;
 
+// import { useState, useEffect } from "react";
+// import { Download, ChevronRight, Loader2 } from "lucide-react";
 
-// import { useState } from "react";
-// import { Download, ChevronRight } from "lucide-react";
+// const Salary = () => {
+//   const [salaryData, setSalaryData] = useState([]);
+//   const [loading, setLoading] = useState(true);
+//   const [error, setError] = useState(null);
+//   const [selectedRecord, setSelectedRecord] = useState(0);
 
-// const SalaryInfo = () => {
-//   const [selectedMonth, setSelectedMonth] = useState(4); // May (0-indexed)
+//   // Fetch salary data from API
+//   useEffect(() => {
+//     const fetchSalaryData = async () => {
+//       try {
+//         setLoading(true);
 
-//   // Base salary configuration
-//   const baseSalary = 30000;
-//   const yearlyPaidLeave = 14;
+//         // Get token from localStorage
+//         const token =
+//           localStorage.getItem("token") ||
+//           localStorage.getItem("authToken") ||
+//           localStorage.getItem("accessToken");
 
-//   // Company holidays for the year (festivals, national holidays)
-//   const companyHolidays = [
-//     "2025-01-01",
-//     "2025-01-26",
-//     "2025-03-14",
-//     "2025-08-09",
-//     "2025-08-15",
-//     "2025-08-16",
-//     "2025-10-02",
-//     "2025-10-20",
-//     "2025-10-21",
-//     "2025-10-22",
-//     "2025-12-25",
-//   ];
-
-//   const isWeekendOrHoliday = (date) => {
-//     const dayOfWeek = date.getDay();
-//     const dateStr = date.toISOString().split("T")[0];
-
-//     // Sunday is always holiday
-//     if (dayOfWeek === 0) return true;
-
-//     // First and second Saturday of the month
-//     if (dayOfWeek === 6) {
-//       const firstDay = new Date(date.getFullYear(), date.getMonth(), 1);
-//       const firstSaturday = 7 - firstDay.getDay() || 7;
-//       const dateOfMonth = date.getDate();
-
-//       if (dateOfMonth === firstSaturday || dateOfMonth === firstSaturday + 7) {
-//         return true;
-//       }
-//     }
-
-//     // Company holidays (festivals)
-//     if (companyHolidays.includes(dateStr)) return true;
-
-//     return false;
-//   };
-
-//   const generateMonthlyAttendance = (year, month) => {
-//     const daysInMonth = new Date(year, month + 1, 0).getDate();
-//     const today = new Date();
-//     const isCurrentMonth =
-//       month === today.getMonth() && year === today.getFullYear();
-
-//     let workingDays = 0;
-//     let presentDays = 0;
-//     let paidLeaveDays = 0;
-//     let sickLeaveDays = 0;
-//     let unpaidLeaveDays = 0;
-//     let totalPaidLeaveUsed = 0;
-
-//     // Calculate paid leave used in previous months
-//     for (let m = 0; m < month; m++) {
-//       const prevMonthDays = new Date(year, m + 1, 0).getDate();
-//       for (let d = 1; d <= prevMonthDays; d++) {
-//         const date = new Date(year, m, d);
-//         if (!isWeekendOrHoliday(date) && d % 8 === 0) {
-//           totalPaidLeaveUsed++;
+//         if (!token) {
+//           throw new Error("No authentication token found. Please login again.");
 //         }
-//       }
-//     }
 
-//     for (let day = 1; day <= daysInMonth; day++) {
-//       const date = new Date(year, month, day);
-
-//       // Skip future dates in current month
-//       if (isCurrentMonth && date > today) break;
-
-//       // Skip weekends and holidays (these don't count as working days)
-//       if (isWeekendOrHoliday(date)) continue;
-
-//       workingDays++;
-
-//       // Generate attendance pattern
-//       if (day % 8 === 0) {
-//         // Leave every 8th working day
-//         if (totalPaidLeaveUsed < yearlyPaidLeave) {
-//           if (Math.random() > 0.7) {
-//             // 30% chance it's sick leave
-//             sickLeaveDays++;
-//           } else {
-//             paidLeaveDays++;
+//         const response = await fetch(
+//           "https://attendancebackends.onrender.com/admin/salarydetails/user",
+//           {
+//             method: "GET",
+//             headers: {
+//               Authorization: `Bearer ${token}`,
+//               "Content-Type": "application/json",
+//             },
 //           }
-//           totalPaidLeaveUsed++;
-//         } else {
-//           unpaidLeaveDays++;
+//         );
+
+//         if (response.status === 401) {
+//           throw new Error("Authentication failed. Please login again.");
 //         }
-//       } else if (day % 5 === 0) {
-//         // Half day counts as 0.5 present day
-//         presentDays += 0.5;
-//       } else {
-//         presentDays++;
+
+//         if (!response.ok) {
+//           throw new Error(`HTTP error! status: ${response.status}`);
+//         }
+
+//         const result = await response.json();
+
+//         if (result.message === "Fetched successfully" && result.data) {
+//           // Sort by creation date (newest first)
+//           const sortedData = result.data.sort(
+//             (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+//           );
+//           setSalaryData(sortedData);
+//         } else {
+//           setSalaryData([]);
+//         }
+//       } catch (err) {
+//         console.error("Error fetching salary data:", err);
+//         setError(err.message);
+//       } finally {
+//         setLoading(false);
 //       }
-//     }
-
-//     return {
-//       workingDays,
-//       presentDays: Math.round(presentDays),
-//       paidLeaveDays,
-//       sickLeaveDays,
-//       unpaidLeaveDays,
-//       totalPaidLeaveUsed,
 //     };
+
+//     fetchSalaryData();
+//   }, []);
+
+//   // Format date to readable format
+//   const formatDate = (dateString) => {
+//     if (!dateString) return "";
+//     const date = new Date(dateString);
+//     return date.toLocaleDateString("en-IN", {
+//       year: "numeric",
+//       month: "long",
+//       day: "numeric",
+//     });
 //   };
 
-//   const generateMonthlyData = () => {
-//     const monthNames = [
-//       "January",
-//       "February",
-//       "March",
-//       "April",
-//       "May",
-//       "June",
-//       "July",
-//       "August",
-//       "September",
-//       "October",
-//       "November",
-//       "December",
-//     ];
+//   // Format month and year from date
+//   const formatMonthYear = (dateString) => {
+//     if (!dateString) return "";
+//     const date = new Date(dateString);
+//     return date.toLocaleDateString("en-IN", {
+//       year: "numeric",
+//       month: "long",
+//     });
+//   };
 
-//     const currentYear = 2025;
-//     const data = [];
-
-//     for (let month = 0; month <= 4; month++) {
-//       // January to May
-//       const attendance = generateMonthlyAttendance(currentYear, month);
-//       const totalDaysInMonth = new Date(currentYear, month + 1, 0).getDate();
-
-//       // Calculate salary
-//       const paidDays =
-//         attendance.presentDays +
-//         attendance.paidLeaveDays +
-//         attendance.sickLeaveDays;
-//       const perDaySalary = baseSalary / attendance.workingDays;
-//       const payableSalary = Math.round(perDaySalary * paidDays);
-
-//       data.push({
-//         month: monthNames[month],
-//         monthIndex: month,
-//         totalDays: totalDaysInMonth,
-//         workingDays: attendance.workingDays,
-//         present: attendance.presentDays,
-//         paidLeave: attendance.paidLeaveDays,
-//         sickLeave: attendance.sickLeaveDays,
-//         unpaidLeave: attendance.unpaidLeaveDays,
-//         baseSalary,
-//         payableSalary,
-//         perDaySalary: Math.round(perDaySalary),
-//       });
+//   // Get status color
+//   const getStatusColor = (status) => {
+//     switch (status?.toLowerCase()) {
+//       case "pending":
+//         return "text-orange-600 bg-orange-50 border-orange-200";
+//       case "approved":
+//         return "text-green-600 bg-green-50 border-green-200";
+//       case "rejected":
+//         return "text-red-600 bg-red-50 border-red-200";
+//       default:
+//         return "text-gray-600 bg-gray-50 border-gray-200";
 //     }
-
-//     return data;
 //   };
 
-//   const monthlyData = generateMonthlyData();
-//   const currentMonthData = monthlyData.find(
-//     (item) => item.monthIndex === selectedMonth
-//   );
+//   if (loading) {
+//     return (
+//       <div className="max-w-sm mx-auto bg-white min-h-screen flex items-center justify-center">
+//         <div className="flex flex-col items-center gap-3">
+//           <Loader2 className="animate-spin text-purple-600" size={32} />
+//           <span className="text-sm text-gray-600">Loading salary data...</span>
+//         </div>
+//       </div>
+//     );
+//   }
 
-//   if (!currentMonthData) return <div>Loading...</div>;
+//   if (!salaryData.length) {
+//     return (
+//       <div className="max-w-sm mx-auto bg-white min-h-screen flex items-center justify-center">
+//         <div className="text-center p-6">
+//           <div className="text-gray-400 mb-2">📊</div>
+//           <h3 className="text-sm font-semibold text-gray-800 mb-2">
+//             No Salary Data
+//           </h3>
+//           <p className="text-xs text-gray-600">No salary records found</p>
+//         </div>
+//       </div>
+//     );
+//   }
 
-//   const {
-//     month,
-//     totalDays,
-//     workingDays,
-//     present,
-//     paidLeave,
-//     sickLeave,
-//     unpaidLeave,
-//     payableSalary,
-//     perDaySalary,
-//   } = currentMonthData;
+//   const currentRecord = salaryData[selectedRecord];
 
 //   return (
 //     <div className="max-w-sm mx-auto bg-white min-h-screen">
@@ -376,59 +524,84 @@ export default SalaryInfo;
 //         <div className="bg-gray-50 rounded-xl p-4 mb-6 border border-gray-100">
 //           <div className="flex justify-between items-center mb-4">
 //             <h3 className="text-sm font-semibold text-gray-700">
-//               This Month's Salary
+//               Salary Details
 //             </h3>
 //             <select
-//               value={selectedMonth}
-//               onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+//               value={selectedRecord}
+//               onChange={(e) => setSelectedRecord(parseInt(e.target.value))}
 //               className="text-sm bg-white border border-gray-300 rounded-lg px-3 py-1.5 font-medium"
 //             >
-//               {monthlyData.map((item) => (
-//                 <option key={item.monthIndex} value={item.monthIndex}>
-//                   {item.month}
+//               {salaryData.map((record, index) => (
+//                 <option key={record._id} value={index}>
+//                   {new Date(record.createdAt).toLocaleString("default", {
+//                     month: "long",
+//                   })}
 //                 </option>
 //               ))}
 //             </select>
 //           </div>
 
+//           {/* Employee Info */}
 //           <div className="space-y-2 mb-4">
 //             <div className="flex justify-between text-sm">
 //               <span className="text-gray-600">Present</span>
-//               <span className="font-medium text-gray-800">{present} Days</span>
-//             </div>
-//             <div className="flex justify-between text-sm">
-//               <span className="text-gray-600">Paid leaves</span>
 //               <span className="font-medium text-gray-800">
-//                 {paidLeave} days
+//                 {currentRecord.present || "N/A"}
 //               </span>
 //             </div>
 //             <div className="flex justify-between text-sm">
-//               <span className="text-gray-600">Sick leaves</span>
+//               <span className="text-gray-600">Piad Leave</span>
 //               <span className="font-medium text-gray-800">
-//                 {sickLeave} days
+//                 {currentRecord.paidleave || "N/A"}
 //               </span>
 //             </div>
 //             <div className="flex justify-between text-sm">
-//               <span className="text-gray-600">Unpaid leaves</span>
-//               <span className="font-medium text-gray-800">
-//                 {unpaidLeave} days
+//               <span className="text-gray-600">Sick Levae</span>
+//               <span className="font-medium text-gray-800 capitalize">
+//                 {currentRecord.sickleave || "N/A"}
+//               </span>
+//             </div>
+//             <div className="flex justify-between text-sm">
+//               <span className="text-gray-600">Unpaid Leave</span>
+//               <span className="font-medium text-gray-800 capitalize">
+//                 {currentRecord.unpiadleave || "N/A"}
 //               </span>
 //             </div>
 //           </div>
 
+//           {/* Salary Breakdown */}
+//           <div className="space-y-2 mb-4">
+//             <div className="flex justify-between text-sm">
+//               <span className="text-gray-600">Base Salary</span>
+//               <span className="font-medium text-gray-800">
+//                 ₹{currentRecord.actualSalary || 0}
+//               </span>
+//             </div>
+//             {(currentRecord.addOnAmount || currentRecord.addOn) && (
+//               <div className="flex justify-between text-sm">
+//                 <span className="text-gray-600">
+//                   Add-on ({currentRecord.addOnType || "bonus"})
+//                 </span>
+//                 <span className="font-medium text-green-600">
+//                   +₹{currentRecord.addOnAmount || currentRecord.addOn || 0}
+//                 </span>
+//               </div>
+//             )}
+//           </div>
+
 //           <div className="border-t border-gray-200 pt-3 mb-4">
-//             <div className="flex justify-between items-center">
+//             <div className="flex justify-between items-center mb-2">
 //               <span className="text-sm font-semibold text-gray-800">
-//                 Payable salary
+//                 Payable Salary
 //               </span>
 //               <span className="text-lg font-bold text-gray-900">
-//                 ₹{payableSalary}
+//                 ₹{currentRecord.payable || 0}
 //               </span>
 //             </div>
 //           </div>
 
 //           <div className="flex justify-between items-center">
-//             <span className="text-xs text-gray-500">Download info</span>
+//             <span className="text-xs text-gray-500">Download Invoice</span>
 //             <button className="flex items-center gap-1.5 text-xs text-purple-600 border border-purple-200 bg-purple-50 px-3 py-1.5 rounded-full hover:bg-purple-100 transition-colors">
 //               <span>Download</span>
 //               <Download size={12} />
@@ -442,26 +615,24 @@ export default SalaryInfo;
 //             Salary History
 //           </h3>
 //           <div className="space-y-2 pb-4">
-//             {monthlyData.map((item, i) => (
+//             {salaryData.map((record, index) => (
 //               <div
-//                 key={i}
-//                 className="flex justify-between items-center px-4 py-3 rounded-xl bg-gray-50 border border-gray-100 hover:bg-gray-100 transition-colors cursor-pointer"
+//                 key={record._id}
+//                 onClick={() => setSelectedRecord(index)}
+//                 className={`flex justify-between items-center px-4 py-3 rounded-xl border transition-colors cursor-pointer ${
+//                   selectedRecord === index
+//                     ? "bg-purple-50 border-purple-200"
+//                     : "bg-gray-50 border-gray-100 hover:bg-gray-100"
+//                 }`}
 //               >
-//                 <div>
-//                   <span className="text-sm font-medium text-gray-800">
-//                     {item.month}
-//                   </span>
-//                   <p className="text-xs text-gray-500">
-//                     {item.present + item.paidLeave + item.sickLeave}/
-//                     {item.workingDays} paid days
-//                   </p>
-//                 </div>
-//                 <div className="flex items-center gap-2">
-//                   <span className="text-sm font-bold text-gray-900">
-//                     ₹{item.payableSalary.toLocaleString()}
-//                   </span>
-//                   <ChevronRight size={16} className="text-gray-400" />
-//                 </div>
+//                 <span className="text-sm font-medium text-gray-800">
+//                   {new Date(record.createdAt).toLocaleString("default", {
+//                     month: "long",
+//                   })}
+//                 </span>
+//                 <span className="text-sm font-bold text-gray-900">
+//                   ₹{(record.payable || 0).toLocaleString()}
+//                 </span>
 //               </div>
 //             ))}
 //           </div>
@@ -471,149 +642,4 @@ export default SalaryInfo;
 //   );
 // };
 
-// export default SalaryInfo;
-
-// import { useState } from "react";
-// import { FiDownload, FiChevronRight } from "react-icons/fi";
-
-// const SalaryInfo = () => {
-//   const monthlyData = [
-//     {
-//       month: "January",
-//       totalDays: 31,
-//       present: 22,
-//       paidLeave: 4,
-//       sickLeave: 2,
-//       unpaidLeave: 3,
-//       baseSalary: 30000,
-//     },
-//     {
-//       month: "February",
-//       totalDays: 29,
-//       present: 20,
-//       paidLeave: 5,
-//       sickLeave: 1,
-//       unpaidLeave: 3,
-//       baseSalary: 30000,
-//     },
-//     {
-//       month: "March",
-//       totalDays: 31,
-//       present: 21,
-//       paidLeave: 6,
-//       sickLeave: 2,
-//       unpaidLeave: 2,
-//       baseSalary: 30000,
-//     },
-//     {
-//       month: "April",
-//       totalDays: 30,
-//       present: 23,
-//       paidLeave: 2,
-//       sickLeave: 1,
-//       unpaidLeave: 4,
-//       baseSalary: 30000,
-//     },
-//     {
-//       month: "May",
-//       totalDays: 31,
-//       present: 23,
-//       paidLeave: 5,
-//       sickLeave: 1,
-//       unpaidLeave: 1,
-//       baseSalary: 30000,
-//     },
-//   ];
-
-//   const [selectedMonth, setSelectedMonth] = useState("May");
-
-//   const currentMonthData = monthlyData.find(
-//     (item) => item.month === selectedMonth
-//   );
-
-//   const { totalDays, present, paidLeave, sickLeave, unpaidLeave, baseSalary } =
-//     currentMonthData;
-
-//   const paidDays = present + paidLeave + sickLeave;
-//   const perDaySalary = baseSalary / totalDays;
-//   const payableSalary = Math.round(perDaySalary * paidDays);
-
-//   return (
-//     <div className="max-w-sm mx-auto bg-white rounded-xl shadow-md">
-//       {/* This Month's Salary Box */}
-//       <div className="bg-gray-100 rounded-lg p-2 mb-4">
-//         <div className="flex justify-between items-center mb-4">
-//           <h3 className="text-sm font-semibold text-gray-700">
-//             This Month’s Salary
-//           </h3>
-//           <select
-//             value={selectedMonth}
-//             onChange={(e) => setSelectedMonth(e.target.value)}
-//             className="text-sm bg-white border border-gray-300 rounded px-2 py-1"
-//           >
-//             {monthlyData.map((item) => (
-//               <option key={item.month} value={item.month}>
-//                 {item.month}
-//               </option>
-//             ))}
-//           </select>
-//         </div>
-
-//         <div className="text-xs text-gray-600 space-y-1 mb-3">
-//           <div className="flex justify-between">
-//             <span>Present</span>
-//             <span>{present} Days</span>
-//           </div>
-//           <div className="flex justify-between">
-//             <span>Paid leaves</span>
-//             <span>{paidLeave} days</span>
-//           </div>
-//           <div className="flex justify-between">
-//             <span>Sick leaves</span>
-//             <span>{sickLeave} days</span>
-//           </div>
-//           <div className="flex justify-between">
-//             <span>Unpaid leaves</span>
-//             <span>{unpaidLeave} days</span>
-//           </div>
-//         </div>
-
-//         <div className="flex justify-between items-center border-t pt-2 text-sm font-semibold text-gray-800">
-//           <span>Payable salary</span>
-//           <span className="text-black">₹{payableSalary}</span>
-//         </div>
-
-//         <div className="mt-2 flex justify-between items-center text-xs">
-//           <span className="text-gray-500">Download info</span>
-//           <button className="flex items-center gap-1 text-xs text-purple-600 border border-purple-500 px-2 py-1 rounded-full">
-//             Download <FiDownload size={14} />
-//           </button>
-//         </div>
-//       </div>
-
-//       {/* Salary History List */}
-//       <div className="space-y-2">
-//         {monthlyData.map((item, i) => {
-//           const daysPaid = item.present + item.paidLeave + item.sickLeave;
-//           const amount = Math.round(
-//             (item.baseSalary / item.totalDays) * daysPaid
-//           );
-//           return (
-//             <div
-//               key={i}
-//               className="flex justify-between items-center px-2 py-2 rounded-lg bg-gray-50 shadow-sm text-sm"
-//             >
-//               <span>{item.month}</span>
-//               <span className="font-semibold flex items-center gap-1">
-//                 ₹{amount}
-//                 <FiChevronRight size={14} />
-//               </span>
-//             </div>
-//           );
-//         })}
-//       </div>
-//     </div>
-//   );
-// };
-
-// export default SalaryInfo;
+// export default Salary;

@@ -30,7 +30,7 @@ const Profile = () => {
         });
 
         const userAuthData = response.data.data.panelData.userAuth?.[0] || {};
-        console.log("Profile Data:", userAuthData);
+        // console.log("Profile Data:", userAuthData);
 
         setUserData(userAuthData);
         if (userAuthData.image) {
@@ -57,7 +57,7 @@ const Profile = () => {
     name: userData.userName || "User",
     designation: userData.role || "Employee",
     employeeId: userData.userId || "EMP0000",
-    profileImage: selectedImage || profileImage, // selectedImage will have API image URL
+    profileImage: selectedImage || profileImage, 
   };
 
   const profileOptions = [
@@ -104,15 +104,6 @@ const Profile = () => {
     setShowConfirmModal(false);
     handleLogout(navigate);
   };
-
-  if (loading) {
-    return (
-      <div className="max-w-md mx-auto sm:hidden bg-white min-h-screen pt-4 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-10 w-10 border-t-4 border-b-4 border-blue-600"></div>
-      </div>
-    );
-  }
-
   if (error) {
     return (
       <div className="max-w-md mx-auto sm:hidden bg-white min-h-screen pt-4 flex items-center justify-center px-4">

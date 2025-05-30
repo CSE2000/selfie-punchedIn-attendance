@@ -6,7 +6,6 @@ import { IoMdArrowBack } from "react-icons/io";
 
 const SelfiePunchedIn = () => {
   const navigate = useNavigate();
-  const [targetLocations, setTargetLocations] = useState([null]);
   const [selfieImage, setSelfieImage] = useState(null);
   const [imageTimestamp, setImageTimestamp] = useState(null);
   const [location, setLocation] = useState({ lat: null, lon: null });
@@ -15,7 +14,7 @@ const SelfiePunchedIn = () => {
   const [cameraActive, setCameraActive] = useState(false);
   const [locationName, setLocationName] = useState("Unknown Location");
   const [isGettingLocation, setIsGettingLocation] = useState(false);
-  const [hasPunchedIn, setHasPunchedIn] = useState(false); // Added missing state
+  const [hasPunchedIn, setHasPunchedIn] = useState(false);
   const [userProfile, setUserProfile] = useState({
     name: "",
     email: "",
@@ -25,8 +24,6 @@ const SelfiePunchedIn = () => {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
-
-  const isAppleDevice = () => /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
 
   // Function to get location name from coordinates using reverse geocoding
   const getLocationName = async (lat, lon) => {
@@ -70,36 +67,6 @@ const SelfiePunchedIn = () => {
     }
   };
 
-  const areLocationsMatching = (userLoc, targetLocs) => {
-    if (!userLoc || !targetLocs?.length) return false;
-
-    const userLat = parseFloat(userLoc.lat);
-    const userLon = parseFloat(userLoc.lon);
-    const maxAllowedDistance = isAppleDevice() ? 10000 : 15000; // meters
-
-    const toRadians = (degree) => (degree * Math.PI) / 180;
-    const earthRadius = 6371; // in km
-
-    return targetLocs.some((target) => {
-      const targetLat = parseFloat(target.lat);
-      const targetLon = parseFloat(target.lon);
-
-      const dLat = toRadians(targetLat - userLat);
-      const dLon = toRadians(targetLon - userLon);
-
-      const a =
-        Math.sin(dLat / 2) ** 2 +
-        Math.cos(toRadians(userLat)) *
-          Math.cos(toRadians(targetLat)) *
-          Math.sin(dLon / 2) ** 2;
-
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      const distanceInMeters = earthRadius * c * 1000;
-
-      return distanceInMeters <= maxAllowedDistance;
-    });
-  };
-
   // Check authentication and redirect if not logged in
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -121,53 +88,6 @@ const SelfiePunchedIn = () => {
       setHasPunchedIn(true);
     }
   }, [navigate]);
-
-  // Fetch target locations
-  useEffect(() => {
-    const fetchTargetLocations = async () => {
-      try {
-        const response = await axios.get("https://attendancebackends.onrender.com/location");
-        console.log("location Data:", response.data);
-
-        // Always-available fallback or additional known locations
-        const fallbackLocations = [
-          { lat: 21.246699, lon: 81.662397 },
-          { lat: 21.237747, lon: 81.66866 },
-          { lat: 21.237747, lon: 81.67866 },
-        ];
-
-        let formatted = [];
-
-        if (response.data?.locations?.length) {
-          const fetched = response.data.locations.map((loc) => ({
-            lat: parseFloat(loc.latitude),
-            lon: parseFloat(loc.longitude),
-          }));
-
-          // Combine fetched + fallback locations
-          formatted = [...fetched, ...fallbackLocations];
-          console.log("Combined target locations (API + fallback):", formatted);
-        } else {
-          // If API returns no locations, use fallback
-          formatted = fallbackLocations;
-          console.warn("No API locations found. Using fallback locations.");
-        }
-
-        setTargetLocations(formatted);
-      } catch (error) {
-        console.error("Error fetching target locations:", error);
-
-        // On fetch error, still fallback to default locations
-        setTargetLocations([
-          { lat: 21.246699, lon: 81.662397 },
-          { lat: 21.237747, lon: 81.66866 },
-          { lat: 21.237743, lon: 81.67866 },
-        ]);
-      }
-    };
-
-    fetchTargetLocations();
-  }, []);
 
   // Request permissions on component mount
   useEffect(() => {
@@ -326,10 +246,7 @@ const SelfiePunchedIn = () => {
       return;
     }
 
-    if (!areLocationsMatching(location, targetLocations)) {
-      alert("You are not at the correct location.");
-      return;
-    }
+    console.log("📍 Current location:", location);
 
     setIsSubmitting(true);
 
@@ -529,7 +446,6 @@ const SelfiePunchedIn = () => {
       setIsSubmitting(false);
     }
   };
-
   return (
     // <>
     //   <div className="flex items-center h-12 w-full bg-white px-6 py-4 shadow-md rounded-md">
@@ -662,136 +578,309 @@ const SelfiePunchedIn = () => {
     //   </div>
     // </>
 
-    <>
-      <div className="flex items-center h-12 w-full bg-white px-6 py-4 shadow-md rounded-md">
+    // <>
+    //   <div className="flex items-center h-12 w-full bg-white px-6 py-4 shadow-md rounded-md">
+    //     <button
+    //       onClick={() => navigate("/home")}
+    //       className="flex items-center space-x-2 text-gray-600 font-medium"
+    //     >
+    //       <IoMdArrowBack size={20} />
+    //       <span>Home</span>
+    //     </button>
+    //   </div>
+
+    //   <div className="h-screen overflow-hidden">
+    //     <div className="container h-full">
+    //       <div className="max-w-md h-full overflow-hidden">
+    //         <div className="p-4 h-full">
+    //           {/* Selfie UI */}
+    //           <div className="flex flex-col items-center justify-center h-full space-y-6">
+    //             {selfieImage ? (
+    //               <div className="relative">
+    //                 <div className="relative flex items-center justify-center">
+    //                   <img
+    //                     src={selfieImage}
+    //                     alt="Captured Selfie"
+    //                     className="w-60 h-60 rounded-full object-cover"
+    //                   />
+    //                 </div>
+    //                 {/* Reset Button */}
+    //                 <button
+    //                   onClick={resetSelfie}
+    //                   className="absolute top-0 right-0 bg-red-500 text-white p-1 rounded-full hover:bg-red-600"
+    //                 >
+    //                   <X size={16} />
+    //                 </button>
+    //               </div>
+    //             ) : (
+    //               <div className="flex items-center justify-center">
+    //                 {!cameraActive ? (
+    //                   <button
+    //                     onClick={() => setCameraActive(true)}
+    //                     className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-full"
+    //                   >
+    //                     Open Camera
+    //                   </button>
+    //                 ) : (
+    //                   <div className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center">
+    //                     <video
+    //                       ref={videoRef}
+    //                       autoPlay
+    //                       playsInline
+    //                       className="w-full h-full object-cover"
+    //                     />
+    //                     <button
+    //                       onClick={captureSelfie}
+    //                       className="absolute bottom-10 bg-white p-4 rounded-full shadow-md"
+    //                     >
+    //                       <div className="w-16 h-16 rounded-full bg-purple-400 shadow-inner border-4 border-purple-200"></div>
+    //                     </button>
+    //                   </div>
+    //                 )}
+    //               </div>
+    //             )}
+
+    //             <canvas ref={canvasRef} style={{ display: "none" }} />
+
+    //             {/* Action Button - Show when selfie is captured */}
+    //             {selfieImage && (
+    //               <button
+    //                 onClick={hasPunchedIn ? handlePunchOut : handlePunchIn}
+    //                 disabled={
+    //                   isSubmitting ||
+    //                   !location.lat ||
+    //                   !location.lon ||
+    //                   isGettingLocation
+    //                 }
+    //                 className={`${
+    //                   hasPunchedIn
+    //                     ? "bg-red-600 hover:bg-red-700"
+    //                     : "bg-green-600 hover:bg-green-700"
+    //                 } text-white px-6 py-2 mt-4 rounded-full disabled:bg-gray-400 disabled:cursor-not-allowed`}
+    //               >
+    //                 {isSubmitting
+    //                   ? "Processing..."
+    //                   : hasPunchedIn
+    //                   ? "Punch Out"
+    //                   : "Punch In"}
+    //               </button>
+    //             )}
+
+    //             {/* API Response */}
+    //             {apiResponse && (
+    //               <div
+    //                 className={`mt-4 p-3 rounded-md text-center ${
+    //                   apiResponse.success
+    //                     ? "bg-green-100 text-green-700"
+    //                     : "bg-red-100 text-red-700"
+    //                 }`}
+    //               >
+    //                 <p className="text-sm font-medium">{apiResponse.message}</p>
+    //                 {apiResponse.data && (
+    //                   <div className="mt-2 text-xs space-y-1">
+    //                     <p>Employee ID: {apiResponse.data.userID}</p>
+    //                     <p>Name: {apiResponse.data.userName}</p>
+    //                     <p>Status: {apiResponse.data.status}</p>
+    //                     <p>Date: {apiResponse.data.date}</p>
+    //                     {apiResponse.data.punchIn && (
+    //                       <p>
+    //                         Punch In:{" "}
+    //                         {new Date(
+    //                           apiResponse.data.punchIn
+    //                         ).toLocaleString()}
+    //                       </p>
+    //                     )}
+    //                     {apiResponse.data.punchOut && (
+    //                       <p>
+    //                         Punch Out:{" "}
+    //                         {new Date(
+    //                           apiResponse.data.punchOut
+    //                         ).toLocaleString()}
+    //                       </p>
+    //                     )}
+    //                   </div>
+    //                 )}
+    //               </div>
+    //             )}
+    //           </div>
+    //         </div>
+    //       </div>
+    //     </div>
+    //   </div>
+    // </>
+    <div className="min-h-screen bg-gray-50">
+      {/* Header - Fixed positioning for mobile */}
+      <div className="fixed top-0 left-0 right-0 z-40 flex items-center h-14 w-full bg-white px-4 py-3 shadow-md">
         <button
           onClick={() => navigate("/home")}
-          className="flex items-center space-x-2 text-gray-600 font-medium"
+          className="flex items-center space-x-2 text-gray-600 font-medium touch-manipulation"
         >
           <IoMdArrowBack size={20} />
-          <span>Home</span>
+          <span className="text-sm sm:text-base">Home</span>
         </button>
       </div>
 
-      <div className="h-screen overflow-hidden">
-        <div className="container h-full">
-          <div className="max-w-md h-full overflow-hidden">
-            <div className="p-4 h-full">
-              {/* Selfie UI */}
-              <div className="flex flex-col items-center justify-center h-full space-y-6">
-                {selfieImage ? (
-                  <div className="relative">
-                    <div className="relative flex items-center justify-center">
-                      <img
-                        src={selfieImage}
-                        alt="Captured Selfie"
-                        className="w-60 h-60 rounded-full object-cover"
-                      />
-                    </div>
-                    {/* Reset Button */}
-                    <button
-                      onClick={resetSelfie}
-                      className="absolute top-0 right-0 bg-red-500 text-white p-1 rounded-full hover:bg-red-600"
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
+      {/* Main Content - Account for fixed header */}
+      <div className="pt-14 min-h-screen">
+        <div className="w-full max-w-sm mx-auto px-4 py-6">
+          <div className="flex flex-col items-center justify-start min-h-[calc(100vh-3.5rem)] space-y-6">
+            {/* Selfie Display/Capture Section */}
+            {selfieImage ? (
+              <div className="relative mt-8">
+                <div className="relative flex items-center justify-center">
+                  <img
+                    src={selfieImage}
+                    alt="Captured Selfie"
+                    className="w-48 h-48 sm:w-60 sm:h-60 rounded-full object-cover border-4 border-white shadow-lg"
+                  />
+                </div>
+                {/* Reset Button */}
+                <button
+                  onClick={resetSelfie}
+                  className="absolute -top-2 -right-2 bg-red-500 text-white p-2 rounded-full hover:bg-red-600 shadow-md touch-manipulation"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center mt-12">
+                {!cameraActive ? (
+                  <button
+                    onClick={() => setCameraActive(true)}
+                    className="bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white px-6 py-3 rounded-full font-medium shadow-md touch-manipulation transition-colors"
+                  >
+                    Open Camera
+                  </button>
                 ) : (
-                  <div className="flex items-center justify-center">
-                    {!cameraActive ? (
-                      <button
-                        onClick={() => setCameraActive(true)}
-                        className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-full"
-                      >
-                        Open Camera
-                      </button>
-                    ) : (
-                      <div className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center">
-                        <video
-                          ref={videoRef}
-                          autoPlay
-                          playsInline
-                          className="w-full h-full object-cover"
-                        />
+                  // Camera Overlay - Full screen on mobile
+                  <div className="fixed inset-0 z-50 bg-black flex flex-col">
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className="flex-1 w-full object-cover"
+                    />
+
+                    {/* Camera Controls */}
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-6">
+                      <div className="flex items-center justify-center">
                         <button
                           onClick={captureSelfie}
-                          className="absolute bottom-10 bg-white p-4 rounded-full shadow-md"
+                          className="bg-white p-3 rounded-full shadow-lg touch-manipulation active:scale-95 transition-transform"
                         >
-                          <div className="w-16 h-16 rounded-full bg-purple-400 shadow-inner border-4 border-purple-200"></div>
+                          <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-blue-500 shadow-inner border-4 border-blue-200"></div>
                         </button>
                       </div>
-                    )}
-                  </div>
-                )}
 
-                <canvas ref={canvasRef} style={{ display: "none" }} />
-
-                {/* Action Button - Show when selfie is captured */}
-                {selfieImage && (
-                  <button
-                    onClick={hasPunchedIn ? handlePunchOut : handlePunchIn}
-                    disabled={
-                      isSubmitting ||
-                      !location.lat ||
-                      !location.lon ||
-                      isGettingLocation
-                    }
-                    className={`${
-                      hasPunchedIn
-                        ? "bg-red-600 hover:bg-red-700"
-                        : "bg-green-600 hover:bg-green-700"
-                    } text-white px-6 py-2 mt-4 rounded-full disabled:bg-gray-400 disabled:cursor-not-allowed`}
-                  >
-                    {isSubmitting
-                      ? "Processing..."
-                      : hasPunchedIn
-                      ? "Punch Out"
-                      : "Punch In"}
-                  </button>
-                )}
-
-                {/* API Response */}
-                {apiResponse && (
-                  <div
-                    className={`mt-4 p-3 rounded-md text-center ${
-                      apiResponse.success
-                        ? "bg-green-100 text-green-700"
-                        : "bg-red-100 text-red-700"
-                    }`}
-                  >
-                    <p className="text-sm font-medium">{apiResponse.message}</p>
-                    {apiResponse.data && (
-                      <div className="mt-2 text-xs space-y-1">
-                        <p>Employee ID: {apiResponse.data.userID}</p>
-                        <p>Name: {apiResponse.data.userName}</p>
-                        <p>Status: {apiResponse.data.status}</p>
-                        <p>Date: {apiResponse.data.date}</p>
-                        {apiResponse.data.punchIn && (
-                          <p>
-                            Punch In:{" "}
-                            {new Date(
-                              apiResponse.data.punchIn
-                            ).toLocaleString()}
-                          </p>
-                        )}
-                        {apiResponse.data.punchOut && (
-                          <p>
-                            Punch Out:{" "}
-                            {new Date(
-                              apiResponse.data.punchOut
-                            ).toLocaleString()}
-                          </p>
-                        )}
-                      </div>
-                    )}
+                      {/* Close Camera Button */}
+                      <button
+                        onClick={() => setCameraActive(false)}
+                        className="absolute top-4 right-4 bg-black/50 text-white p-2 rounded-full touch-manipulation"
+                      >
+                        <X size={20} />
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
-            </div>
+            )}
+
+            {/* Hidden Canvas */}
+            <canvas ref={canvasRef} className="hidden" />
+
+            {/* Action Buttons */}
+            {selfieImage && (
+              <div className="w-full max-w-xs space-y-4">
+                <button
+                  onClick={hasPunchedIn ? handlePunchOut : handlePunchIn}
+                  disabled={
+                    isSubmitting ||
+                    !location.lat ||
+                    !location.lon ||
+                    isGettingLocation
+                  }
+                  className={`w-full py-3 px-6 rounded-full font-medium text-white transition-colors touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed ${
+                    hasPunchedIn
+                      ? "bg-red-600 hover:bg-red-700 active:bg-red-800"
+                      : "bg-green-600 hover:bg-green-700 active:bg-green-800"
+                  }`}
+                >
+                  {isSubmitting
+                    ? "Processing..."
+                    : hasPunchedIn
+                    ? "Punch Out"
+                    : "Punch In"}
+                </button>
+
+                {/* Location Status */}
+                {isGettingLocation && (
+                  <div className="text-center text-sm text-gray-600">
+                    <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500 mr-2"></div>
+                    Getting location...
+                  </div>
+                )}
+
+                {!location.lat && !isGettingLocation && (
+                  <div className="text-center text-sm text-red-600">
+                    Location required for attendance
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* API Response */}
+            {apiResponse && (
+              <div
+                className={`w-full max-w-xs mt-4 p-4 rounded-lg text-center transition-all ${
+                  apiResponse.success
+                    ? "bg-green-50 border border-green-200 text-green-800"
+                    : "bg-red-50 border border-red-200 text-red-800"
+                }`}
+              >
+                <p className="text-sm font-medium mb-2">
+                  {apiResponse.message}
+                </p>
+                {apiResponse.data && (
+                  <div className="text-xs space-y-1 bg-white/50 p-3 rounded border">
+                    <div className="grid grid-cols-1 gap-1 text-left">
+                      <p>
+                        <span className="font-medium">ID:</span>{" "}
+                        {apiResponse.data.userID}
+                      </p>
+                      <p>
+                        <span className="font-medium">Name:</span>{" "}
+                        {apiResponse.data.userName}
+                      </p>
+                      <p>
+                        <span className="font-medium">Status:</span>{" "}
+                        {apiResponse.data.status}
+                      </p>
+                      <p>
+                        <span className="font-medium">Date:</span>{" "}
+                        {apiResponse.data.date}
+                      </p>
+                      {apiResponse.data.punchIn && (
+                        <p>
+                          <span className="font-medium">Punch In:</span>{" "}
+                          {new Date(apiResponse.data.punchIn).toLocaleString()}
+                        </p>
+                      )}
+                      {apiResponse.data.punchOut && (
+                        <p>
+                          <span className="font-medium">Punch Out:</span>{" "}
+                          {new Date(apiResponse.data.punchOut).toLocaleString()}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 };
 

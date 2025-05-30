@@ -11,11 +11,14 @@ const DocumentCenter = () => {
     const fetchEmpInfo = async () => {
       try {
         const token = localStorage.getItem("token");
-        const response = await axios.get("https://attendancebackends.onrender.com/empinfo", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        const response = await axios.get(
+          "https://attendancebackends.onrender.com/empinfo",
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
 
         const data = response.data?.data;
 
@@ -51,6 +54,28 @@ const DocumentCenter = () => {
     fetchEmpInfo();
   }, []);
 
+  const handleDownload = async (url, filename) => {
+    try {
+      const response = await fetch(url, {
+        mode: "cors",
+      });
+
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error("Download failed:", error);
+    }
+  };
+
   return (
     <div className="md:hidden w-full p-2 max-w-md mx-auto bg-white rounded-lg shadow">
       <div className="grid grid-cols-2 gap-4">
@@ -69,14 +94,13 @@ const DocumentCenter = () => {
               />
 
               {/* Small floating download button */}
-              <a
-                href={doc.url}
-                download
+              <button
+                onClick={() => handleDownload(doc.url, `${doc.label}.jpg`)}
                 className="absolute bottom-2 right-2 bg-black/70 hover:bg-black/90 p-2 rounded-full text-white"
                 title="Download"
               >
                 <FaDownload />
-              </a>
+              </button>
             </div>
           </div>
         ))}

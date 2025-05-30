@@ -1,35 +1,210 @@
-import { useState } from "react";
-import { FiUser, FiCalendar, FiCheckCircle, FiArrowLeft } from "react-icons/fi";
+import React, { useEffect, useState } from "react";
+import { FiUser, FiCalendar, FiCheckCircle } from "react-icons/fi";
+import { io } from "socket.io-client";
+import axios from "axios";
 import Image from "../assets/Group (1).svg";
 
-const NotificationPage = () => {
-  const [notifications, setNotifications] = useState([
-    {
-      id: 1,
-      title: "Late Entry Notification",
-      message:
-        "You’ve punched in late today. Please inform your manager if needed.",
-      icon: <FiUser size={20} />,
-      time: "20m",
-    },
-    {
-      id: 2,
-      title: "Leave Approved",
-      message: "Your leave for May 25 has been approved.",
-      icon: <FiCalendar size={20} />,
-      time: "20m",
-    },
-    {
-      id: 3,
-      title: "App/System Notifications",
-      message: "PIN Changed Successfully",
-      icon: <FiCheckCircle size={20} />,
-      time: "20m",
-    },
-  ]);
+const Notification = () => {
+  const [userId, setUserId] = useState(null);
+  const [notifications, setNotifications] = useState([]);
+  const [socket, setSocket] = useState(null);
+  const [connectionStatus, setConnectionStatus] = useState("disconnected");
+
+  // Initialize socket only once
+  useEffect(() => {
+    const newSocket = io("https://attendancebackends.onrender.com/", {
+      autoConnect: false,
+      transports: ["websocket", "polling"],
+      timeout: 20000,
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+    });
+
+    setSocket(newSocket);
+    return () => {
+      console.log("🧹 Cleaning up socket connection");
+      newSocket.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    const fetchUserId = async () => {
+      try {
+        console.log("🔍 Fetching userId...");
+        const token = localStorage.getItem("token");
+        if (!token) {
+          console.error("❌ No token found in localStorage.");
+          return;
+        }
+
+        const response = await axios.get(
+          "https://attendancebackends.onrender.com/data",
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        console.log("📊 Full user data response:", response.data);
+
+        // Check for userID inside punchData if not found at top level
+        const id =
+          response?.data?.userID ||
+          response?.data?.userId ||
+          response?.data?.id ||
+          response?.data?.punchData?.[0]?.userID ||
+          response?.data?.data?.userID; // Additional check
+
+        if (id) {
+          setUserId(id);
+          console.log("✅ Fetched userId:", id);
+        } else {
+          console.error(
+            "❌ userId not found in response. Available keys:",
+            Object.keys(response.data)
+          );
+          // Fallback - try to extract from any nested object
+          const extractUserId = (obj) => {
+            for (const key in obj) {
+              if (
+                key.toLowerCase().includes("userid") ||
+                key.toLowerCase().includes("user_id")
+              ) {
+                return obj[key];
+              }
+              if (typeof obj[key] === "object" && obj[key] !== null) {
+                const nested = extractUserId(obj[key]);
+                if (nested) return nested;
+              }
+            }
+            return null;
+          };
+
+          const extractedId = extractUserId(response.data);
+          if (extractedId) {
+            setUserId(extractedId);
+            console.log("✅ Extracted userId:", extractedId);
+          }
+        }
+      } catch (error) {
+        console.error("❌ Error fetching userId:", error);
+      }
+    };
+
+    fetchUserId();
+  }, []);
+
+  // Handle socket connection and events
+  useEffect(() => {
+    if (!socket || !userId) {
+      console.log("⏳ Waiting for socket or userId...", {
+        socket: !!socket,
+        userId,
+      });
+      return;
+    }
+
+    console.log("🚀 Setting up socket connection for userId:", userId);
+
+    // Connection event handlers
+    socket.on("connect", () => {
+      console.log("✅ Socket connected:", socket.id);
+      setConnectionStatus("connected");
+
+      // Register the user
+      console.log("📝 Registering user:", userId);
+      socket.emit("register", userId);
+    });
+
+    socket.on("disconnect", (reason) => {
+      console.log("❌ Socket disconnected:", reason);
+      setConnectionStatus("disconnected");
+    });
+
+    socket.on("connect_error", (error) => {
+      console.error("❌ Connection error:", error);
+      setConnectionStatus("error");
+    });
+
+    socket.on("reconnect", (attemptNumber) => {
+      console.log("🔄 Socket reconnected after", attemptNumber, "attempts");
+      setConnectionStatus("connected");
+    });
+
+    socket.on("reconnect_error", (error) => {
+      console.error("❌ Reconnection error:", error);
+    });
+
+    // Notification handler
+    socket.on("notification", (message) => {
+      console.log("📩 New Notification received:", message);
+
+      let icon = <FiUser size={20} />;
+      let title = "New Notification";
+
+      if (message.toLowerCase().includes("leave")) {
+        icon = <FiCalendar size={20} />;
+        title = "Leave Notification";
+      } else if (
+        message.toLowerCase().includes("pin") ||
+        message.toLowerCase().includes("system")
+      ) {
+        icon = <FiCheckCircle size={20} />;
+        title = "System Notification";
+      }
+
+      const newNotification = {
+        id: Date.now(),
+        title,
+        message:
+          typeof message === "string" ? message : JSON.stringify(message),
+        icon,
+        time: new Date().toLocaleTimeString(),
+      };
+
+      console.log("➕ Adding notification:", newNotification);
+      setNotifications((prev) => [newNotification, ...prev]);
+    });
+
+    // Test notification handler (for debugging)
+    socket.on("test-notification", (data) => {
+      console.log("🧪 Test notification received:", data);
+    });
+
+    // Connect the socket
+    socket.connect();
+
+    // Cleanup function
+    return () => {
+      console.log("🧹 Cleaning up socket event listeners");
+      socket.off("connect");
+      socket.off("disconnect");
+      socket.off("connect_error");
+      socket.off("reconnect");
+      socket.off("reconnect_error");
+      socket.off("notification");
+      socket.off("test-notification");
+    };
+  }, [socket, userId]);
 
   const markAsRead = (id) => {
-    setNotifications(notifications.filter((n) => n.id !== id));
+    console.log("✅ Marking notification as read:", id);
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  };
+
+  // Test function to simulate notification
+  const testNotification = () => {
+    const testNote = {
+      id: Date.now(),
+      title: "Test Notification",
+      message: "This is a test notification to verify the system is working",
+      icon: <FiCheckCircle size={20} />,
+      time: new Date().toLocaleTimeString(),
+    };
+    setNotifications((prev) => [testNote, ...prev]);
+    console.log("🧪 Test notification added");
   };
 
   return (
@@ -59,7 +234,6 @@ const NotificationPage = () => {
           ))}
         </div>
       ) : (
-        // Empty state
         <div className="flex flex-col items-center justify-center mt-20 text-center text-gray-600">
           <img src={Image} alt="No notifications" className="w-32 h-32 mb-4" />
           <p className="font-semibold text-lg">You're all caught up!</p>
@@ -70,35 +244,4 @@ const NotificationPage = () => {
   );
 };
 
-export default NotificationPage;
-
-// // src/App.js
-// import React, { useEffect } from "react";
-// import socket from "../socket";
-
-// function App() {
-//   useEffect(() => {
-//     socket.on("connect", () => {
-//       console.log("Connected with socket ID:", socket.id);
-
-//       socket.emit("register", "EMP0012");
-//     });
-
-//     socket.on("notification", (message) => {
-//       alert("Notification: " + message);
-//     });
-
-//     return () => {
-//       socket.off("connect");
-//       socket.off("notification");
-//     };
-//   }, []);
-
-//   return (
-//     <div className="App">
-//       <h1>React + Socket.IO</h1>
-//     </div>
-//   );
-// }
-
-// export default App;
+export default Notification;
