@@ -12,7 +12,7 @@ const HomePage = () => {
     absent: 0,
   });
   const [monthlyAttendance, setMonthlyAttendance] = useState([]);
-  const [allMonthlyAttendance, setAllMonthlyAttendance] = useState([]); 
+  const [allMonthlyAttendance, setAllMonthlyAttendance] = useState([]);
   const [isPunchedIn, setIsPunchedIn] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [punchInTime, setPunchInTime] = useState(null);
@@ -280,16 +280,18 @@ const HomePage = () => {
     }
 
     // Calculate attendance counts
+    // Count "Present", "On Time", "Late", and "Halfday" as present
     const present = monthlyData.filter(
-      (d) => d.status === "Present" || d.status === "On Time"
+      (d) =>
+        d.status === "Present" ||
+        d.status === "On Time" ||
+        d.status === "Late" ||
+        d.status === "Halfday"
     ).length;
 
     const absent = monthlyData.filter((d) => d.status === "Absent").length;
 
-    const halfdays = monthlyData.filter((d) => d.status === "Halfday").length;
-    const late = monthlyData.filter((d) => d.status === "Late").length;
-
-    // Calculate approved leaves for current month
+    // Calculate approved leaves for current month from userleave endpoint only
     const monthlyLeaves = leaveData.filter((leave) => {
       const leaveFromDate = new Date(leave.from);
       const leaveToDate = new Date(leave.to);
@@ -309,7 +311,8 @@ const HomePage = () => {
     return {
       present: present,
       absent: absent,
-      leave: halfdays + late + approvedMonthlyLeaves,
+      // Only count actual approved leaves from userleave endpoint
+      leave: approvedMonthlyLeaves,
     };
   };
 
