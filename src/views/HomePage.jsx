@@ -12,7 +12,7 @@ const HomePage = () => {
     absent: 0,
   });
   const [monthlyAttendance, setMonthlyAttendance] = useState([]);
-  const [allMonthlyAttendance, setAllMonthlyAttendance] = useState([]); // New state for all monthly data
+  const [allMonthlyAttendance, setAllMonthlyAttendance] = useState([]); 
   const [isPunchedIn, setIsPunchedIn] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [punchInTime, setPunchInTime] = useState(null);
@@ -237,16 +237,6 @@ const HomePage = () => {
             } else if (entry.entryTime === "ontime") {
               displayStatus = "On Time";
             }
-          } else if (isToday && hasPunchOut) {
-            // FIXED: Reset isPunchedIn to false when user has punched out
-            setIsPunchedIn(false);
-            setPunchInTime(null);
-
-            if (entry.entryTime === "late") {
-              displayStatus = "Late";
-            } else if (entry.entryTime === "ontime") {
-              displayStatus = "On Time";
-            }
           }
 
           return {
@@ -428,16 +418,6 @@ const HomePage = () => {
               } else if (entry.entryTime === "ontime") {
                 displayStatus = "On Time";
               }
-            } else if (isToday && hasPunchOut) {
-              // FIXED: Reset isPunchedIn to false when user has punched out
-              setIsPunchedIn(false);
-              setPunchInTime(null);
-
-              if (entry.entryTime === "late") {
-                displayStatus = "Late";
-              } else if (entry.entryTime === "ontime") {
-                displayStatus = "On Time";
-              }
             }
 
             return {
@@ -454,7 +434,6 @@ const HomePage = () => {
 
         console.log("Transformed paginated attendance data:", transformedData);
 
-        // Update pagination info from API response
         const totalPagesFromAPI =
           apiResponse.totalPages ||
           Math.ceil(
@@ -489,7 +468,6 @@ const HomePage = () => {
     fetchAttendance();
   }, [selectedMonth, selectedStatus, currentPage]);
 
-  // Calculate summary when all monthly data or leave data changes
   useEffect(() => {
     if (allMonthlyAttendance.length > 0 || leaveData.length > 0) {
       const updatedSummary = calculateAttendanceSummary(allMonthlyAttendance);
@@ -755,7 +733,7 @@ const HomePage = () => {
         </div>
       )}
 
-      {/* Punch In/Out Button - Fixed above menu bar */}
+      {/* Punch In/Out Button */}
       <div className="fixed bottom-16 left-0 right-0 bg-white p-2">
         <div className="max-w-sm mx-auto">
           <button
